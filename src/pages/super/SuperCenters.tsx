@@ -373,6 +373,28 @@ export function SuperCenters() {
     )
   );
 
+  // Render incremental de pendientes: 10 al inicio, +10 al asomar el centinela.
+  const PENDING_PAGE = 10;
+  const [pendingVisible, setPendingVisible] = useState(PENDING_PAGE);
+  useEffect(() => {
+    setPendingVisible(PENDING_PAGE);
+  }, [searchQuery]);
+  const visiblePending = filteredPending.slice(0, pendingVisible);
+  const pendingScrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingSentinelRef = useRef<HTMLDivElement | null>(null);
+  const pendingHasMore = pendingVisible < filteredPending.length;
+  useEffect(() => {
+    const node = pendingSentinelRef.current;
+    if (!node || !pendingHasMore) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        setPendingVisible((v) => v + PENDING_PAGE);
+      }
+    }, { root: pendingScrollRef.current, rootMargin: '200px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [pendingHasMore]);
+
   const filteredApproved = approved.filter((c) =>
     [c.name, c.organization, c.address, c.email].some((field) =>
       (field ?? '').toLowerCase().includes(searchQuery.toLowerCase())
@@ -438,20 +460,26 @@ export function SuperCenters() {
           ) : filteredPending.length === 0 ? (
             <p className="text-xs text-muted font-body">No se encontraron centros pendientes que coincidan con la búsqueda.</p>
           ) : (
-            filteredPending.map((c) => (
-              <Card key={c.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-display text-base font-black text-ink">{c.name}</p>
-                  <p className="font-body text-sm text-muted">{c.organization} · {c.address}</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => onApprove(c.id)}
-                    leftIcon={<Check className="h-4 w-4" />}>Aprobar</Button>
-                  <Button size="sm" variant="ghost" onClick={() => onReject(c.id)}
-                    leftIcon={<Trash2 className="h-4 w-4" />}>Rechazar</Button>
-                </div>
-              </Card>
-            ))
+            <div
+              ref={pendingScrollRef}
+              className="scrollbar-thin flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-1"
+            >
+              {visiblePending.map((c) => (
+                <Card key={c.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-display text-base font-black text-ink">{c.name}</p>
+                    <p className="font-body text-sm text-muted">{c.organization} · {c.address}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => onApprove(c.id)}
+                      leftIcon={<Check className="h-4 w-4" />}>Aprobar</Button>
+                    <Button size="sm" variant="ghost" onClick={() => onReject(c.id)}
+                      leftIcon={<Trash2 className="h-4 w-4" />}>Rechazar</Button>
+                  </div>
+                </Card>
+              ))}
+              {pendingHasMore && <div ref={pendingSentinelRef} className="h-px" />}
+            </div>
           )}
         </section>
       </QueryBoundary>
