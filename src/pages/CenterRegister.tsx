@@ -42,10 +42,9 @@ import {
    Registro de un centro de acopio (PRD Módulo 2 · alta de cuenta) en 3 pasos:
      1. Datos del centro (obligatorio)   2. Cuenta y contacto (obligatorio)
      3. Redes y web (opcional, se pueden completar luego desde el panel).
-   La cuenta se activa de inmediato: el centro queda público (is_approved=true)
-   sin el sello de verificación (is_verified=false), que un superadmin otorga
-   después. Crea cuenta + centro + perfil de forma atómica vía RPC
-   `register_center`. La ubicación se elige con el mapa (o autocompletar).
+   Crea la cuenta + el centro (is_approved=false, pendiente de aprobación) +
+   el perfil del admin de forma atómica vía RPC `register_center`. La ubicación
+   se elige con el mapa (o autocompletar la dirección).
    ========================================================================== */
 
 type Fields = {
@@ -221,14 +220,14 @@ export function CenterRegister() {
                 <CheckCircle2 className="h-6 w-6" aria-hidden />
               </span>
               <h1 className="font-display text-h2 font-black tracking-snug text-ink">
-                ¡Centro registrado!
+                Solicitud enviada
               </h1>
               <p className="mt-2 max-w-sm font-body text-sm text-body">
-                Registramos{' '}
+                Recibimos el registro de{' '}
                 <strong className="text-ink">{fields.name || fields.organization}</strong>.
                 {needsEmailConfirm
-                  ? ' Revisa tu correo para confirmar la cuenta; luego inicia sesión para administrar tu centro.'
-                  : ' Ya aparece en el mapa público. Un superadmin podrá otorgarle el sello de organización verificada más adelante.'}
+                  ? ' Revisa tu correo para confirmar la cuenta; luego inicia sesión para completar el alta de tu centro.'
+                  : ' Una organización autorizante revisará los datos y, al aprobarlos, tu centro aparecerá en el mapa público.'}
               </p>
               <div className="mt-6 flex w-full flex-col gap-2 sm:flex-row sm:justify-center">
                 <Button variant="primary" size="lg" onClick={() => navigate('/admin/login')}>
