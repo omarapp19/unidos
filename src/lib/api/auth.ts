@@ -92,39 +92,67 @@ export interface RegisterCenterResult {
 export async function registerCenter(
   input: RegisterCenterInput,
 ): Promise<RegisterCenterResult> {
+  const email = input.email.trim();
   const { data, error } = await supabase.auth.signUp({
-    email: input.email.trim(),
+    email,
     password: input.password,
   });
+
+  let session = data?.session ?? null;
+
   if (error) {
-    throw new ApiError(
-      error.message === 'User already registered'
-        ? 'Ya existe una cuenta con ese correo.'
-        : error.message,
-      { status: error.status, cause: error },
-    );
+    // El alta no es atómica entre Auth (GoTrue) y Postgres: si un intento previo
+    // creó el usuario pero falló el RPC (p. ej. desfase de reloj => "JWT emitido
+    // en el futuro"), quedó una cuenta huérfana sin centro. En vez de un callejón
+    // sin salida ("ya existe una cuenta"), reanudamos: iniciamos sesión con las
+    // mismas credenciales y dejamos que el RPC (idempotente) cree el centro.
+    if (error.message === 'User already registered') {
+      const { data: signInData, error: signInErr } =
+        await supabase.auth.signInWithPassword({ email, password: input.password });
+      if (signInErr || !signInData.session) {
+        // Existe una cuenta real con otra contraseña: no podemos reanudar.
+        throw new ApiError('Ya existe una cuenta con ese correo.', {
+          status: error.status,
+          cause: error,
+        });
+      }
+      session = signInData.session;
+    } else {
+      throw new ApiError(error.message, { status: error.status, cause: error });
+    }
   }
 
-  if (!data.session) return { hasSession: false };
+  // Sin sesión (el proyecto exige confirmar el correo): el centro se creará al
+  // primer login. No hay cuenta huérfana porque aún no hay sesión para el RPC.
+  if (!session) return { hasSession: false };
 
-  const centerId = await withRetry(async () => {
-    const { data: id, error: rpcErr } = await supabase.rpc('register_center', {
-      p_name: input.name.trim(),
-      p_organization: input.organization.trim(),
-      p_address: input.address.trim(),
-      p_schedule: input.schedule.trim(),
-      p_phone: input.phone?.trim() || null,
-      p_whatsapp: input.whatsapp?.trim() || null,
-      p_instagram: input.instagram?.trim() || null,
-      p_website: input.website?.trim() || null,
-      p_email: input.email.trim(),
-      p_lat: input.lat,
-      p_lng: input.lng,
-      p_full_name: (input.fullName ?? input.name).trim(),
+  // Crea el centro de forma idempotente. Si falla, cerramos la sesión para no
+  // dejar al usuario a medio registrar; al reintentar se reanuda por la rama de
+  // "User already registered" + signIn de arriba.
+  let centerId: string;
+  try {
+    centerId = await withRetry(async () => {
+      const { data: id, error: rpcErr } = await supabase.rpc('register_center', {
+        p_name: input.name.trim(),
+        p_organization: input.organization.trim(),
+        p_address: input.address.trim(),
+        p_schedule: input.schedule.trim(),
+        p_phone: input.phone?.trim() || null,
+        p_whatsapp: input.whatsapp?.trim() || null,
+        p_instagram: input.instagram?.trim() || null,
+        p_website: input.website?.trim() || null,
+        p_email: email,
+        p_lat: input.lat,
+        p_lng: input.lng,
+        p_full_name: (input.fullName ?? input.name).trim(),
+      });
+      if (rpcErr) throw fromPostgrestError(rpcErr);
+      return id as string;
     });
-    if (rpcErr) throw fromPostgrestError(rpcErr);
-    return id as string;
-  });
+  } catch (err) {
+    await supabase.auth.signOut().catch(() => {});
+    throw err;
+  }
 
   return { hasSession: true, centerId };
 }
