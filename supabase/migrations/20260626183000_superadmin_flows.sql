@@ -17,6 +17,8 @@ CREATE POLICY "Solo superadmins modifican categorías"
                       WHERE p.id = auth.uid() AND p.role = 'superadmin'));
 
 -- 2. Rechazar centro = eliminarlo (solo superadmin) --------------------------
+DROP POLICY IF EXISTS "Superadmins eliminan centros" ON public.centers;
+
 CREATE POLICY "Superadmins eliminan centros"
   ON public.centers
   FOR DELETE

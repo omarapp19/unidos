@@ -3,6 +3,8 @@ import { cn } from '@/lib/utils';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
+  /** Muestra un asterisco rojo junto a la etiqueta (campo obligatorio). */
+  requiredMark?: boolean;
   /** Mensaje de error; activa estado inválido y aria-invalid. */
   error?: string;
   /** Texto de ayuda bajo el campo (se oculta si hay error). */
@@ -14,7 +16,7 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, error, hint, hideLabel = false, leadingIcon, id, className, disabled, ...props },
+  { label, requiredMark, error, hint, hideLabel = false, leadingIcon, id, className, disabled, ...props },
   ref,
 ) {
   const autoId = useId();
@@ -34,6 +36,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           )}
         >
           {label}
+          {requiredMark && <span className="text-danger-ink"> *</span>}
         </label>
       )}
 

@@ -63,6 +63,12 @@ export interface RegisterCenterInput {
   address: string;
   schedule: string;
   phone?: string;
+  /** WhatsApp en formato internacional (solo dígitos, ej. "584125550142"). */
+  whatsapp?: string;
+  /** Usuario de Instagram sin @. */
+  instagram?: string;
+  /** Sitio web (URL completa). */
+  website?: string;
   /** Coordenadas del centro (geocodificadas desde la dirección). */
   lat: number;
   lng: number;
@@ -108,6 +114,10 @@ export async function registerCenter(
       p_address: input.address.trim(),
       p_schedule: input.schedule.trim(),
       p_phone: input.phone?.trim() || null,
+      p_whatsapp: input.whatsapp?.trim() || null,
+      p_instagram: input.instagram?.trim() || null,
+      p_website: input.website?.trim() || null,
+      p_email: input.email.trim(),
       p_lat: input.lat,
       p_lng: input.lng,
       p_full_name: (input.fullName ?? input.name).trim(),

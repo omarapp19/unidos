@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Building2, Plus, Check, Trash2, Pencil, BadgeCheck } from 'lucide-react';
+import { Building2, Plus, Check, Trash2, Pencil, BadgeCheck, AtSign, Globe, Mail } from 'lucide-react';
 import type { Center } from '@/types';
 import {
   getPendingCenters,
@@ -13,6 +13,24 @@ import {
 } from '@/lib/api/centers';
 import { toApiError, type ApiError } from '@/lib/api/errors';
 import { forwardGeocode } from '@/lib/geo';
+import { splitDial } from '@/lib/phone-codes';
+import {
+  EMPTY_BLOCK,
+  isScheduleValid,
+  parseSchedule,
+  serializeSchedule,
+  type ScheduleBlock,
+} from '@/lib/schedule';
+import {
+  isValidEmail,
+  isValidInstagram,
+  isValidPhoneNumber,
+  isValidUrl,
+  formatPhone,
+  normalizeInstagram,
+  normalizeUrl,
+  toWhatsAppNumber,
+} from '@/lib/validation';
 import { useQuery } from '@/lib/hooks/useQuery';
 import { useMutation } from '@/lib/hooks/useMutation';
 import {
@@ -20,41 +38,43 @@ import {
   Card,
   Modal,
   Input,
+  Checkbox,
   QueryBoundary,
   EmptyState,
   CenterStatusBadge,
   VerifiedBadge,
 } from '@/components/ui';
+import { PhoneField, ScheduleField, EMPTY_PHONE, type PhoneValue } from '@/components/form';
 
 /* ===========================================================================
    Panel de superadmin · gestión de centros: aprobar/rechazar pendientes,
    verificar, editar datos/coords y registrar centros huérfanos (sin admin).
    ========================================================================== */
 
+/** Campos de texto del formulario (los estructurados van en estados aparte). */
 type FormState = {
   name: string;
   organization: string;
   address: string;
-  schedule: string;
-  phone: string;
-  whatsapp: string;
   instagram: string;
   website: string;
   email: string;
 };
 
-const EMPTY_FORM: FormState = {
-  name: '', organization: '', address: '', schedule: '',
-  phone: '', whatsapp: '', instagram: '', website: '', email: '',
-};
+type ErrorKey =
+  | 'name'
+  | 'organization'
+  | 'address'
+  | 'schedule'
+  | 'phone'
+  | 'instagram'
+  | 'website'
+  | 'email';
+type Errors = Partial<Record<ErrorKey, string>>;
 
-function fromCenter(c: Center): FormState {
-  return {
-    name: c.name, organization: c.organization, address: c.address,
-    schedule: c.schedule, phone: c.phone ?? '', whatsapp: c.whatsapp ?? '',
-    instagram: c.instagram ?? '', website: c.website ?? '', email: c.email ?? '',
-  };
-}
+const EMPTY_FORM: FormState = {
+  name: '', organization: '', address: '', instagram: '', website: '', email: '',
+};
 
 const PAGE_SIZE = 10;
 
@@ -132,33 +152,96 @@ export function SuperCenters() {
   // null = cerrado, 'new' = alta, Center = edición.
   const [editing, setEditing] = useState<Center | 'new' | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [phone, setPhone] = useState<PhoneValue>(EMPTY_PHONE);
+  const [schedule, setSchedule] = useState<ScheduleBlock[]>([{ ...EMPTY_BLOCK }]);
+  const [scheduleLegacy, setScheduleLegacy] = useState<string | undefined>(undefined);
+  const [hasWhatsApp, setHasWhatsApp] = useState(false);
+  const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const busy = create.loading || update.loading;
 
+  const phoneValid = isValidPhoneNumber(phone.number);
+
+  function set<K extends keyof FormState>(key: K, value: string) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  /** Carga los estados estructurados (teléfono/horario/whatsapp) desde un centro. */
+  function loadStructured(center?: Center) {
+    if (!center) {
+      setPhone(EMPTY_PHONE);
+      setSchedule([{ ...EMPTY_BLOCK }]);
+      setScheduleLegacy(undefined);
+      setHasWhatsApp(false);
+      return;
+    }
+    setPhone(center.phone ? { ...splitDial(center.phone) } : EMPTY_PHONE);
+    const blocks = parseSchedule(center.schedule);
+    if (blocks) {
+      setSchedule(blocks);
+      setScheduleLegacy(undefined);
+    } else {
+      setSchedule([{ ...EMPTY_BLOCK }]);
+      setScheduleLegacy(center.schedule || undefined);
+    }
+    setHasWhatsApp(!!center.whatsapp);
+  }
+
   function openNew() {
     setForm(EMPTY_FORM);
+    loadStructured();
+    setErrors({});
     setFormError(null);
     setEditing('new');
   }
   function openEdit(c: Center) {
-    setForm(fromCenter(c));
+    setForm({
+      name: c.name, organization: c.organization, address: c.address,
+      instagram: c.instagram ?? '', website: c.website ?? '', email: c.email ?? '',
+    });
+    loadStructured(c);
+    setErrors({});
     setFormError(null);
     setEditing(c);
   }
   function close() {
     setEditing(null);
   }
-  function set<K extends keyof FormState>(key: K, value: string) {
-    setForm((f) => ({ ...f, [key]: value }));
+
+  function validate(): Errors {
+    const e: Errors = {};
+    if (!form.name.trim()) e.name = 'Ingresa el nombre.';
+    if (!form.organization.trim()) e.organization = 'Indica la organización.';
+    if (!form.address.trim()) e.address = 'Ingresa la dirección.';
+    // Horario opcional, pero si se empezó a llenar debe quedar completo.
+    const scheduleTouched = schedule.some(
+      (b) => b.days.length > 0 || b.open !== '' || b.close !== '',
+    );
+    if (scheduleTouched && !isScheduleValid(schedule))
+      e.schedule = 'Completa día, apertura y cierre en cada bloque.';
+    if (phone.number.trim() && !phoneValid) e.phone = 'Número de teléfono no válido.';
+    if (form.instagram.trim() && !isValidInstagram(form.instagram))
+      e.instagram = 'Usuario de Instagram no válido.';
+    if (form.website.trim() && !isValidUrl(normalizeUrl(form.website)))
+      e.website = 'URL no válida (ej. https://centro.org).';
+    if (form.email.trim() && !isValidEmail(form.email)) e.email = 'Correo no válido.';
+    return e;
   }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setFormError(null);
-    if (!form.name.trim() || !form.organization.trim() || !form.address.trim()) {
-      setFormError('Nombre, organización y dirección son obligatorios.');
-      return;
-    }
+    const errs = validate();
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    const scheduleStr = serializeSchedule(schedule);
+    const phoneStr = phone.number.trim() ? formatPhone(phone.dial, phone.number) : '';
+    const whatsappStr =
+      hasWhatsApp && phoneValid ? toWhatsAppNumber(phone.dial, phone.number) : '';
+    const instagram = form.instagram.trim() ? normalizeInstagram(form.instagram) : '';
+    const website = form.website.trim() ? normalizeUrl(form.website) : '';
+
     try {
       const coords = await forwardGeocode(form.address);
       if (editing === 'new') {
@@ -168,16 +251,16 @@ export function SuperCenters() {
         }
         await create.mutate({
           name: form.name, organization: form.organization, address: form.address,
-          schedule: form.schedule, phone: form.phone, whatsapp: form.whatsapp,
-          instagram: form.instagram, website: form.website, email: form.email,
+          schedule: scheduleStr, phone: phoneStr, whatsapp: whatsappStr,
+          instagram, website, email: form.email,
           lat: coords.lat, lng: coords.lng, isApproved: true,
         });
       } else if (editing !== null) {
         const patch: CenterPatch = {
           name: form.name.trim(), organization: form.organization.trim(),
-          address: form.address.trim(), schedule: form.schedule.trim(),
-          phone: form.phone.trim() || null, whatsapp: form.whatsapp.trim() || null,
-          instagram: form.instagram.trim() || null, website: form.website.trim() || null,
+          address: form.address.trim(), schedule: scheduleStr,
+          phone: phoneStr || null, whatsapp: whatsappStr || null,
+          instagram: instagram || null, website: website || null,
           email: form.email.trim() || null,
         };
         // Re-geocodifica solo si la dirección cambió y se pudo ubicar.
@@ -348,18 +431,47 @@ export function SuperCenters() {
           ? 'Centro huérfano: queda aprobado y visible al público.'
           : 'Corrige datos o coordenadas (re-geocodifica al cambiar la dirección).'}
       >
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <Input label="Nombre" value={form.name} onChange={(e) => set('name', e.target.value)} />
-          <Input label="Organización" value={form.organization} onChange={(e) => set('organization', e.target.value)} />
-          <Input label="Dirección" value={form.address} onChange={(e) => set('address', e.target.value)} />
-          <Input label="Horario" value={form.schedule} onChange={(e) => set('schedule', e.target.value)} />
+        <form onSubmit={onSubmit} className="flex flex-col gap-3" noValidate>
+          <Input label="Nombre" requiredMark placeholder="Liceo Andrés Bello"
+            value={form.name} onChange={(e) => set('name', e.target.value)} error={errors.name} />
+          <Input label="Organización" requiredMark placeholder="Cruz Roja Venezolana"
+            value={form.organization} onChange={(e) => set('organization', e.target.value)}
+            error={errors.organization} />
+          <Input label="Dirección" requiredMark placeholder="Av. Francisco de Miranda, Caracas"
+            value={form.address} onChange={(e) => set('address', e.target.value)}
+            error={errors.address} />
+
+          <ScheduleField
+            label="Horario de recepción"
+            value={schedule}
+            onChange={setSchedule}
+            error={errors.schedule}
+            legacyHint={scheduleLegacy}
+          />
+
+          <PhoneField label="Teléfono" value={phone} onChange={setPhone} error={errors.phone} />
+          <Checkbox
+            label="Este número tiene WhatsApp"
+            hint={phoneValid ? undefined : 'Disponible cuando el teléfono sea válido.'}
+            checked={hasWhatsApp}
+            disabled={!phoneValid}
+            onChange={(e) => setHasWhatsApp(e.target.checked)}
+          />
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Input label="Teléfono" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
-            <Input label="WhatsApp" value={form.whatsapp} onChange={(e) => set('whatsapp', e.target.value)} />
-            <Input label="Instagram" value={form.instagram} onChange={(e) => set('instagram', e.target.value)} />
-            <Input label="Sitio web" value={form.website} onChange={(e) => set('website', e.target.value)} />
+            <Input label="Instagram" placeholder="cruzroja_ve"
+              leadingIcon={<AtSign className="h-4 w-4" aria-hidden />}
+              value={form.instagram} onChange={(e) => set('instagram', e.target.value)}
+              error={errors.instagram} />
+            <Input label="Sitio web" placeholder="https://centro.org"
+              leadingIcon={<Globe className="h-4 w-4" aria-hidden />}
+              value={form.website} onChange={(e) => set('website', e.target.value)}
+              error={errors.website} />
           </div>
-          <Input label="Correo" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
+          <Input label="Correo" type="email" placeholder="centro@organizacion.org"
+            leadingIcon={<Mail className="h-4 w-4" aria-hidden />}
+            value={form.email} onChange={(e) => set('email', e.target.value)} error={errors.email} />
+
           {formError && <p className="font-body text-sm text-danger-ink">{formError}</p>}
           <div className="mt-2 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={close} disabled={busy}>Cancelar</Button>

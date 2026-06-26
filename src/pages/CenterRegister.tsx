@@ -3,54 +3,76 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   MapPin,
   ArrowLeft,
+  ArrowRight,
   Building2,
   Landmark,
   Mail,
   Lock,
-  Phone,
-  Clock,
+  AtSign,
+  Globe,
   CheckCircle2,
 } from 'lucide-react';
-import { Button, Card, Input } from '@/components/ui';
+import { Button, Card, Input, Checkbox } from '@/components/ui';
+import { PhoneField, ScheduleField, EMPTY_PHONE, type PhoneValue } from '@/components/form';
+import { cn } from '@/lib/utils';
 import { useMutation } from '@/lib/hooks/useMutation';
 import { registerCenter } from '@/lib/api/auth';
 import { forwardGeocode, DEFAULT_LATLNG } from '@/lib/geo';
+import { EMPTY_BLOCK, isScheduleValid, serializeSchedule, type ScheduleBlock } from '@/lib/schedule';
+import {
+  isValidEmail,
+  isValidInstagram,
+  isValidPhoneNumber,
+  isValidUrl,
+  formatPhone,
+  normalizeInstagram,
+  normalizeUrl,
+  toWhatsAppNumber,
+} from '@/lib/validation';
 
 /* ===========================================================================
-   Registro de un centro de acopio (PRD Módulo 2 · alta de cuenta).
-   Geocodifica la dirección (OSM), crea la cuenta (Supabase Auth) y el centro
-   (is_approved=false) + perfil del admin de forma atómica vía RPC
-   `register_center`. Si el proyecto exige confirmar el correo, informa que debe
-   revisar su bandeja antes de continuar.
+   Registro de un centro de acopio (PRD Módulo 2 · alta de cuenta) en 3 pasos:
+     1. Datos del centro (obligatorio)   2. Cuenta y contacto (obligatorio)
+     3. Redes y web (opcional, se pueden completar luego desde el panel).
+   Geocodifica la dirección (OSM) y crea la cuenta + el centro (is_approved=false)
+   + perfil del admin de forma atómica vía RPC `register_center`.
    ========================================================================== */
 
 type Fields = {
   name: string;
   organization: string;
   address: string;
-  schedule: string;
-  phone: string;
+  instagram: string;
+  website: string;
   email: string;
   password: string;
   confirm: string;
 };
 
-type Errors = Partial<Record<keyof Fields, string>>;
+type FieldKey = keyof Fields | 'phone' | 'schedule';
+type Errors = Partial<Record<FieldKey, string>>;
 
 const EMPTY: Fields = {
   name: '',
   organization: '',
   address: '',
-  schedule: '',
-  phone: '',
+  instagram: '',
+  website: '',
   email: '',
   password: '',
   confirm: '',
 };
 
+const STEPS = ['Tu centro', 'Cuenta y contacto', 'Redes y web'] as const;
+const LAST_STEP = STEPS.length - 1;
+
 export function CenterRegister() {
   const navigate = useNavigate();
+  const [step, setStep] = useState(0);
   const [fields, setFields] = useState<Fields>(EMPTY);
+  const [phone, setPhone] = useState<PhoneValue>(EMPTY_PHONE);
+  const [schedule, setSchedule] = useState<ScheduleBlock[]>([{ ...EMPTY_BLOCK }]);
+  const [hasWhatsApp, setHasWhatsApp] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [done, setDone] = useState(false);
   // true cuando el alta requiere confirmar el correo antes de crear el centro.
@@ -59,31 +81,63 @@ export function CenterRegister() {
   const register = useMutation(registerCenter);
   const loading = register.loading;
 
+  const phoneValid = isValidPhoneNumber(phone.number);
+
   function set<K extends keyof Fields>(key: K, value: string) {
     setFields((f) => ({ ...f, [key]: value }));
   }
 
-  function validate(): Errors {
+  /** Valida solo los campos del paso indicado. */
+  function validateStep(i: number): Errors {
     const e: Errors = {};
-    if (!fields.name.trim()) e.name = 'Ingresa el nombre del centro.';
-    if (!fields.organization.trim()) e.organization = 'Indica la organización autorizante.';
-    if (!fields.address.trim()) e.address = 'Ingresa la dirección.';
-    if (!fields.schedule.trim()) e.schedule = 'Indica el horario de recepción.';
-    if (!fields.email.trim()) e.email = 'Ingresa un correo de contacto.';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email.trim()))
-      e.email = 'Correo no válido.';
-    if (!fields.password) e.password = 'Crea una contraseña.';
-    else if (fields.password.length < 6) e.password = 'Mínimo 6 caracteres.';
-    if (fields.confirm !== fields.password) e.confirm = 'Las contraseñas no coinciden.';
+    if (i === 0) {
+      if (!fields.name.trim()) e.name = 'Ingresa el nombre del centro.';
+      if (!fields.organization.trim()) e.organization = 'Indica la organización autorizante.';
+      if (!fields.address.trim()) e.address = 'Ingresa la dirección.';
+      if (!isScheduleValid(schedule))
+        e.schedule = 'Selecciona al menos un día con su hora de apertura y cierre.';
+    } else if (i === 1) {
+      if (!phone.number.trim()) e.phone = 'Ingresa un teléfono de contacto.';
+      else if (!phoneValid) e.phone = 'Número de teléfono no válido.';
+      if (!fields.email.trim()) e.email = 'Ingresa un correo de contacto.';
+      else if (!isValidEmail(fields.email)) e.email = 'Correo no válido.';
+      if (!fields.password) e.password = 'Crea una contraseña.';
+      else if (fields.password.length < 8) e.password = 'Mínimo 8 caracteres.';
+      if (fields.confirm !== fields.password) e.confirm = 'Las contraseñas no coinciden.';
+    } else if (i === 2) {
+      // Paso opcional: solo valida formato si el usuario escribió algo.
+      if (fields.instagram.trim() && !isValidInstagram(fields.instagram))
+        e.instagram = 'Usuario de Instagram no válido.';
+      if (fields.website.trim() && !isValidUrl(normalizeUrl(fields.website)))
+        e.website = 'Ingresa una URL válida (ej. https://tucentro.org).';
+    }
     return e;
   }
 
-  async function handleSubmit(ev: FormEvent) {
-    ev.preventDefault();
-    setFormError(null);
-    const e = validate();
+  function goNext() {
+    const e = validateStep(step);
     setErrors(e);
     if (Object.keys(e).length > 0) return;
+    setStep((s) => Math.min(s + 1, LAST_STEP));
+  }
+
+  function goBack() {
+    setErrors({});
+    setFormError(null);
+    setStep((s) => Math.max(s - 1, 0));
+  }
+
+  /** Crea la cuenta. `skipSocials` ignora redes/web (se completan luego). */
+  async function submit(skipSocials: boolean) {
+    setFormError(null);
+    const instagram = skipSocials ? '' : fields.instagram.trim();
+    const website = skipSocials ? '' : fields.website.trim();
+
+    if (!skipSocials) {
+      const e = validateStep(2);
+      setErrors(e);
+      if (Object.keys(e).length > 0) return;
+    }
 
     try {
       // Geocodifica la dirección para ubicar el centro en el mapa. Si falla,
@@ -95,8 +149,12 @@ export function CenterRegister() {
         name: fields.name,
         organization: fields.organization,
         address: fields.address,
-        schedule: fields.schedule,
-        phone: fields.phone,
+        schedule: serializeSchedule(schedule),
+        phone: formatPhone(phone.dial, phone.number),
+        whatsapp:
+          hasWhatsApp && phoneValid ? toWhatsAppNumber(phone.dial, phone.number) : undefined,
+        instagram: instagram ? normalizeInstagram(instagram) : undefined,
+        website: website ? normalizeUrl(website) : undefined,
         lat: coords.lat,
         lng: coords.lng,
       });
@@ -105,6 +163,12 @@ export function CenterRegister() {
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'No pudimos crear la cuenta.');
     }
+  }
+
+  function onFormSubmit(ev: FormEvent) {
+    ev.preventDefault();
+    if (step < LAST_STEP) goNext();
+    else submit(false);
   }
 
   return (
@@ -146,101 +210,205 @@ export function CenterRegister() {
             </div>
           ) : (
             <>
-              <div className="mb-6 flex flex-col items-center text-center">
+              <div className="mb-5 flex flex-col items-center text-center">
                 <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-rojo text-white">
                   <MapPin className="h-6 w-6" aria-hidden />
                 </span>
                 <h1 className="font-display text-h2 font-black tracking-snug text-ink">
                   Registra tu centro de acopio
                 </h1>
-                <p className="mt-1 font-body text-sm text-body">
-                  Completa los datos obligatorios. Tu centro se publicará tras la aprobación.
-                </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-                <Input
-                  label="Nombre del centro"
-                  placeholder="Liceo Andrés Bello"
-                  leadingIcon={<Building2 className="h-4 w-4" aria-hidden />}
-                  value={fields.name}
-                  onChange={(e) => set('name', e.target.value)}
-                  error={errors.name}
-                />
-                <Input
-                  label="Organización autorizante"
-                  placeholder="Cruz Roja Venezolana"
-                  leadingIcon={<Landmark className="h-4 w-4" aria-hidden />}
-                  value={fields.organization}
-                  onChange={(e) => set('organization', e.target.value)}
-                  error={errors.organization}
-                />
-                <Input
-                  label="Dirección"
-                  placeholder="Av. Francisco de Miranda, Chacao, Caracas"
-                  leadingIcon={<MapPin className="h-4 w-4" aria-hidden />}
-                  value={fields.address}
-                  onChange={(e) => set('address', e.target.value)}
-                  error={errors.address}
-                />
-                <Input
-                  label="Horario de recepción"
-                  placeholder="Lun a Dom · 8:00 a.m. – 6:00 p.m."
-                  leadingIcon={<Clock className="h-4 w-4" aria-hidden />}
-                  value={fields.schedule}
-                  onChange={(e) => set('schedule', e.target.value)}
-                  error={errors.schedule}
-                />
-                <Input
-                  label="Teléfono (opcional)"
-                  type="tel"
-                  placeholder="+58 412 000 0000"
-                  leadingIcon={<Phone className="h-4 w-4" aria-hidden />}
-                  value={fields.phone}
-                  onChange={(e) => set('phone', e.target.value)}
-                />
+              {/* Indicador de pasos */}
+              <div className="mb-5">
+                <div className="flex items-center justify-between">
+                  {STEPS.map((label, i) => (
+                    <span
+                      key={label}
+                      className={cn(
+                        'font-body text-xs font-bold',
+                        i === step ? 'text-azul-ink' : 'text-subtle',
+                      )}
+                    >
+                      {label}
+                      {i === LAST_STEP && (
+                        <span className="font-normal text-muted"> (opcional)</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-2 flex gap-1.5">
+                  {STEPS.map((label, i) => (
+                    <span
+                      key={label}
+                      className={cn(
+                        'h-1.5 flex-1 rounded-pill transition',
+                        i <= step ? 'bg-azul' : 'bg-surface-3',
+                      )}
+                    />
+                  ))}
+                </div>
+              </div>
 
-                <div className="my-1 border-t border-line-soft" />
+              <form onSubmit={onFormSubmit} className="flex flex-col gap-4" noValidate>
+                {/* ----- Paso 1: datos del centro ----- */}
+                {step === 0 && (
+                  <>
+                    <Input
+                      label="Nombre del centro"
+                      requiredMark
+                      placeholder="Liceo Andrés Bello"
+                      leadingIcon={<Building2 className="h-4 w-4" aria-hidden />}
+                      value={fields.name}
+                      onChange={(e) => set('name', e.target.value)}
+                      error={errors.name}
+                    />
+                    <Input
+                      label="Organización autorizante"
+                      requiredMark
+                      placeholder="Cruz Roja Venezolana"
+                      leadingIcon={<Landmark className="h-4 w-4" aria-hidden />}
+                      value={fields.organization}
+                      onChange={(e) => set('organization', e.target.value)}
+                      error={errors.organization}
+                    />
+                    <Input
+                      label="Dirección"
+                      requiredMark
+                      placeholder="Av. Francisco de Miranda, Chacao, Caracas"
+                      leadingIcon={<MapPin className="h-4 w-4" aria-hidden />}
+                      value={fields.address}
+                      onChange={(e) => set('address', e.target.value)}
+                      error={errors.address}
+                    />
+                    <ScheduleField
+                      label="Horario de recepción"
+                      required
+                      value={schedule}
+                      onChange={setSchedule}
+                      error={errors.schedule}
+                    />
+                  </>
+                )}
 
-                <Input
-                  label="Correo de contacto"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="centro@organizacion.org"
-                  leadingIcon={<Mail className="h-4 w-4" aria-hidden />}
-                  value={fields.email}
-                  onChange={(e) => set('email', e.target.value)}
-                  error={errors.email}
-                />
-                <Input
-                  label="Contraseña"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="••••••••"
-                  leadingIcon={<Lock className="h-4 w-4" aria-hidden />}
-                  value={fields.password}
-                  onChange={(e) => set('password', e.target.value)}
-                  error={errors.password}
-                  hint="Mínimo 6 caracteres."
-                />
-                <Input
-                  label="Confirmar contraseña"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="••••••••"
-                  leadingIcon={<Lock className="h-4 w-4" aria-hidden />}
-                  value={fields.confirm}
-                  onChange={(e) => set('confirm', e.target.value)}
-                  error={errors.confirm}
-                />
+                {/* ----- Paso 2: cuenta y contacto ----- */}
+                {step === 1 && (
+                  <>
+                    <PhoneField
+                      label="Teléfono"
+                      required
+                      value={phone}
+                      onChange={setPhone}
+                      error={errors.phone}
+                    />
+                    <Checkbox
+                      label="Este número tiene WhatsApp"
+                      hint={
+                        phoneValid
+                          ? 'Mostraremos un botón para escribir por WhatsApp.'
+                          : 'Disponible cuando el teléfono sea válido.'
+                      }
+                      checked={hasWhatsApp}
+                      disabled={!phoneValid}
+                      onChange={(e) => setHasWhatsApp(e.target.checked)}
+                    />
+                    <Input
+                      label="Correo de contacto"
+                      requiredMark
+                      type="email"
+                      autoComplete="email"
+                      placeholder="centro@organizacion.org"
+                      leadingIcon={<Mail className="h-4 w-4" aria-hidden />}
+                      value={fields.email}
+                      onChange={(e) => set('email', e.target.value)}
+                      error={errors.email}
+                    />
+                    <Input
+                      label="Contraseña"
+                      requiredMark
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="••••••••"
+                      leadingIcon={<Lock className="h-4 w-4" aria-hidden />}
+                      value={fields.password}
+                      onChange={(e) => set('password', e.target.value)}
+                      error={errors.password}
+                      hint="Mínimo 8 caracteres."
+                    />
+                    <Input
+                      label="Confirmar contraseña"
+                      requiredMark
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="••••••••"
+                      leadingIcon={<Lock className="h-4 w-4" aria-hidden />}
+                      value={fields.confirm}
+                      onChange={(e) => set('confirm', e.target.value)}
+                      error={errors.confirm}
+                    />
+                  </>
+                )}
+
+                {/* ----- Paso 3: redes y web (opcional) ----- */}
+                {step === 2 && (
+                  <>
+                    <p className="font-body text-sm text-body">
+                      Estos datos son opcionales. Puedes omitirlos y completarlos luego desde tu
+                      panel.
+                    </p>
+                    <Input
+                      label="Instagram"
+                      placeholder="cruzroja_ve"
+                      leadingIcon={<AtSign className="h-4 w-4" aria-hidden />}
+                      value={fields.instagram}
+                      onChange={(e) => set('instagram', e.target.value)}
+                      error={errors.instagram}
+                    />
+                    <Input
+                      label="Sitio web"
+                      placeholder="https://tucentro.org"
+                      leadingIcon={<Globe className="h-4 w-4" aria-hidden />}
+                      value={fields.website}
+                      onChange={(e) => set('website', e.target.value)}
+                      error={errors.website}
+                    />
+                  </>
+                )}
 
                 {formError && (
                   <p className="font-body text-sm font-semibold text-danger-ink">{formError}</p>
                 )}
 
-                <Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>
-                  Crear cuenta del centro
-                </Button>
+                {/* ----- Navegación ----- */}
+                <div className="mt-1 flex gap-2">
+                  {step > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="lg"
+                      onClick={goBack}
+                      disabled={loading}
+                      leftIcon={<ArrowLeft className="h-4 w-4" />}
+                    >
+                      Atrás
+                    </Button>
+                  )}
+                  {step < LAST_STEP ? (
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      size="lg"
+                      fullWidth
+                      rightIcon={<ArrowRight className="h-4 w-4" />}
+                    >
+                      Continuar
+                    </Button>
+                  ) : (
+                    <Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>
+                      Crear cuenta del centro
+                    </Button>
+                  )}
+                </div>
               </form>
 
               <p className="mt-5 text-center font-body text-xs text-muted">
