@@ -44,8 +44,8 @@ export interface Center {
 /** `profiles` — administrador (id = auth.users.id). */
 export interface Profile {
   id: string;
-  /** Centro que gestiona. */
-  center_id: string;
+  /** Centro que gestiona; null para superadmin (no gestiona ninguno). */
+  center_id: string | null;
   role: UserRole;
   full_name: string;
 }
