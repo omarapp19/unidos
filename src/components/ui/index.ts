@@ -21,3 +21,6 @@ export type { SpinnerProps, SpinnerSize } from './Spinner';
 
 export { EmptyState } from './EmptyState';
 export type { EmptyStateProps } from './EmptyState';
+
+export { QueryBoundary } from './QueryBoundary';
+export type { QueryBoundaryProps } from './QueryBoundary';
