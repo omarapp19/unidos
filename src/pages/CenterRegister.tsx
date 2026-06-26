@@ -11,6 +11,8 @@ import {
   AtSign,
   Globe,
   CheckCircle2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { Button, Card, Input, Checkbox, AddressInput } from '@/components/ui';
 import { PhoneField, ScheduleField, EMPTY_PHONE, type PhoneValue } from '@/components/form';
@@ -80,6 +82,10 @@ export function CenterRegister() {
   const [formError, setFormError] = useState<string | null>(null);
   const register = useMutation(registerCenter);
   const loading = register.loading;
+
+  const [selectedCoords, setSelectedCoords] = useState<LatLng | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const phoneValid = isValidPhoneNumber(phone.number);
 
@@ -329,10 +335,20 @@ export function CenterRegister() {
                     <Input
                       label="Contraseña"
                       requiredMark
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       autoComplete="new-password"
                       placeholder="••••••••"
                       leadingIcon={<Lock className="h-4 w-4" aria-hidden />}
+                      trailingIcon={
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          className="rounded-full p-1.5 hover:bg-surface-2 transition text-muted hover:text-ink focus-visible:shadow-ring-azul focus-visible:outline-none"
+                          aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      }
                       value={fields.password}
                       onChange={(e) => set('password', e.target.value)}
                       error={errors.password}
@@ -341,10 +357,20 @@ export function CenterRegister() {
                     <Input
                       label="Confirmar contraseña"
                       requiredMark
-                      type="password"
+                      type={showConfirm ? 'text' : 'password'}
                       autoComplete="new-password"
                       placeholder="••••••••"
                       leadingIcon={<Lock className="h-4 w-4" aria-hidden />}
+                      trailingIcon={
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirm((prev) => !prev)}
+                          className="rounded-full p-1.5 hover:bg-surface-2 transition text-muted hover:text-ink focus-visible:shadow-ring-azul focus-visible:outline-none"
+                          aria-label={showConfirm ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        >
+                          {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      }
                       value={fields.confirm}
                       onChange={(e) => set('confirm', e.target.value)}
                       error={errors.confirm}

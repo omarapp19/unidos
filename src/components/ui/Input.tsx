@@ -13,10 +13,12 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   hideLabel?: boolean;
   /** Ícono/adorno al inicio del campo. */
   leadingIcon?: ReactNode;
+  /** Ícono/adorno al final del campo. */
+  trailingIcon?: ReactNode;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, requiredMark, error, hint, hideLabel = false, leadingIcon, id, className, disabled, ...props },
+  { label, requiredMark, error, hint, hideLabel = false, leadingIcon, trailingIcon, id, className, disabled, ...props },
   ref,
 ) {
   const autoId = useId();
@@ -62,10 +64,18 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             'disabled:cursor-not-allowed disabled:bg-surface-2 disabled:opacity-70',
             error ? 'border-danger' : 'border-line focus-visible:border-azul',
             leadingIcon && 'pl-11',
+            trailingIcon && 'pr-11',
             className,
           )}
           {...props}
         />
+        {trailingIcon && (
+          <span
+            className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center"
+          >
+            {trailingIcon}
+          </span>
+        )}
       </div>
 
       {error ? (

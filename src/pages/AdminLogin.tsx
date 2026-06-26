@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MapPin, Mail, Lock, ArrowLeft } from 'lucide-react';
+import { MapPin, Mail, Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, Input } from '@/components/ui';
 
@@ -15,6 +15,7 @@ export function AdminLogin() {
   const { status, profile, signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -80,10 +81,20 @@ export function AdminLogin() {
             />
             <Input
               label="Contraseña"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               autoComplete="current-password"
               placeholder="••••••••"
               leadingIcon={<Lock className="h-4 w-4" aria-hidden />}
+              trailingIcon={
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="rounded-full p-1.5 hover:bg-surface-2 transition text-muted hover:text-ink focus-visible:shadow-ring-azul focus-visible:outline-none"
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              }
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               error={error ?? undefined}
