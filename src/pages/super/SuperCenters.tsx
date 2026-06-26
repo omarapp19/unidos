@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Building2, Plus, Check, Trash2, Pencil, BadgeCheck } from 'lucide-react';
 import type { Center } from '@/types';
 import {
-  getAllCenters,
+  getPendingCenters,
+  getApprovedCentersPage,
   approveCenter,
   setCenterVerified,
   deleteCenter,
@@ -10,6 +11,7 @@ import {
   adminRegisterCenter,
   type CenterPatch,
 } from '@/lib/api/centers';
+import { toApiError, type ApiError } from '@/lib/api/errors';
 import { forwardGeocode } from '@/lib/geo';
 import { useQuery } from '@/lib/hooks/useQuery';
 import { useMutation } from '@/lib/hooks/useMutation';
@@ -54,8 +56,69 @@ function fromCenter(c: Center): FormState {
   };
 }
 
+const PAGE_SIZE = 10;
+
+/** Carga incremental (lazy) de centros aprobados: 10 al inicio, más al hacer scroll. */
+function useApprovedCenters() {
+  const [rows, setRows] = useState<Center[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  // Refs para leer estado actual sin recrear callbacks ni recargas en carrera.
+  const runIdRef = useRef(0);
+  const inFlightRef = useRef(false);
+  const lenRef = useRef(0);
+
+  const load = useCallback(async (reset: boolean) => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+    const runId = ++runIdRef.current;
+    const offset = reset ? 0 : lenRef.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const page = await getApprovedCentersPage(offset, PAGE_SIZE);
+      if (runId !== runIdRef.current) return;
+      setRows((prev) => {
+        const next = reset ? page.rows : [...prev, ...page.rows];
+        lenRef.current = next.length;
+        return next;
+      });
+      setTotal(page.total);
+      setLoadedOnce(true);
+    } catch (err) {
+      if (runId === runIdRef.current) setError(toApiError(err));
+    } finally {
+      // Solo la ejecución vigente limpia el estado; una obsoleta no toca nada
+      // (el cleanup del efecto ya liberó inFlight para permitir la recarga).
+      if (runId === runIdRef.current) {
+        setLoading(false);
+        inFlightRef.current = false;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    load(true);
+    // Invalida la ejecución en curso y libera el cerrojo al desmontar/remontar
+    // (StrictMode monta dos veces: sin esto la 2ª carga quedaría bloqueada).
+    return () => {
+      runIdRef.current++;
+      inFlightRef.current = false;
+    };
+  }, [load]);
+
+  const reload = useCallback(() => load(true), [load]);
+  const loadMore = useCallback(() => load(false), [load]);
+  const hasMore = !loadedOnce || rows.length < total;
+
+  return { rows, total, loading, error, loadedOnce, hasMore, reload, loadMore };
+}
+
 export function SuperCenters() {
-  const centers = useQuery(getAllCenters, []);
+  const pendingQ = useQuery(getPendingCenters, []);
+  const approvedList = useApprovedCenters();
   const approve = useMutation(approveCenter);
   const remove = useMutation(deleteCenter);
   const verify = useMutation((args: { id: string; value: boolean }) =>
@@ -125,7 +188,8 @@ export function SuperCenters() {
         await update.mutate({ id: editing.id, patch });
       }
       close();
-      centers.refetch();
+      pendingQ.refetch();
+      approvedList.reload();
     } catch {
       // El error ya queda en create.error / update.error; muestra genérico.
       setFormError('No se pudo guardar. Intenta de nuevo.');
@@ -134,20 +198,35 @@ export function SuperCenters() {
 
   async function onApprove(id: string) {
     await approve.mutate(id);
-    centers.refetch();
+    pendingQ.refetch();
+    approvedList.reload();
   }
   async function onReject(id: string) {
     await remove.mutate(id);
-    centers.refetch();
+    pendingQ.refetch();
   }
   async function onToggleVerified(c: Center) {
     await verify.mutate({ id: c.id, value: !c.is_verified });
-    centers.refetch();
+    approvedList.reload();
   }
 
-  const all = centers.data ?? [];
-  const pending = all.filter((c) => !c.is_approved);
-  const approved = all.filter((c) => c.is_approved);
+  const pending = pendingQ.data ?? [];
+  const approved = approvedList.rows;
+
+  // Scroll infinito dentro del contenedor con scroll propio: carga la siguiente
+  // página al asomar el centinela (root = el contenedor, no el viewport).
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const { hasMore, loadMore, loading: approvedLoading } = approvedList;
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting && !approvedLoading) loadMore();
+    }, { root: scrollRef.current, rootMargin: '200px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, approvedLoading, loadMore]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -163,13 +242,13 @@ export function SuperCenters() {
         </Button>
       </header>
 
+      {/* Pendientes */}
       <QueryBoundary
-        loading={centers.loading}
-        error={centers.error}
-        onRetry={centers.refetch}
-        loadingLabel="Cargando centros…"
+        loading={pendingQ.loading}
+        error={pendingQ.error}
+        onRetry={pendingQ.refetch}
+        loadingLabel="Cargando pendientes…"
       >
-        {/* Pendientes */}
         <section className="flex flex-col gap-3">
           <h2 className="font-display text-h3 font-black text-ink">
             Pendientes ({pending.length})
@@ -197,12 +276,17 @@ export function SuperCenters() {
             ))
           )}
         </section>
+      </QueryBoundary>
 
-        {/* Aprobados */}
-        <section className="mt-6 flex flex-col gap-3">
-          <h2 className="font-display text-h3 font-black text-ink">
-            Aprobados ({approved.length})
-          </h2>
+      {/* Aprobados · carga incremental (10 por página) */}
+      <section className="mt-6 flex flex-col gap-3">
+        <h2 className="font-display text-h3 font-black text-ink">
+          Aprobados ({approvedList.loadedOnce ? approvedList.total : '…'})
+        </h2>
+        <div
+          ref={scrollRef}
+          className="scrollbar-thin flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-1"
+        >
           {approved.map((c) => (
             <Card key={c.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-col gap-1">
@@ -224,8 +308,37 @@ export function SuperCenters() {
               </div>
             </Card>
           ))}
-        </section>
-      </QueryBoundary>
+
+          {approvedList.error && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-bg p-3">
+              <p className="font-body text-sm text-danger-ink">No se pudieron cargar más centros.</p>
+              <Button size="sm" variant="ghost" onClick={() => loadMore()}>Reintentar</Button>
+            </div>
+          )}
+
+          {/* Centinela del scroll infinito + estado de carga */}
+          {hasMore && (
+            <div ref={sentinelRef} className="flex justify-center py-4">
+              {approvedLoading && (
+                <p className="font-body text-sm text-muted">Cargando centros…</p>
+              )}
+              {!approvedLoading && !approvedList.error && (
+                <Button size="sm" variant="ghost" onClick={() => loadMore()}>
+                  Cargar más
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {approvedList.loadedOnce && approvedList.total === 0 && (
+          <EmptyState
+            icon={<Building2 className="h-6 w-6" />}
+            title="Sin centros aprobados"
+            description="Aprueba un centro pendiente o registra uno nuevo."
+          />
+        )}
+      </section>
 
       <Modal
         open={editing !== null}

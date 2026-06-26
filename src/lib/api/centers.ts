@@ -86,6 +86,39 @@ export function getAllCenters(): Promise<Center[]> {
   });
 }
 
+/** Centros pendientes de aprobación (lista corta para el superadmin). */
+export function getPendingCenters(): Promise<Center[]> {
+  return withRetry(async () => {
+    const { data, error } = await supabase
+      .from('centers')
+      .select(COLUMNS)
+      .eq('is_approved', false)
+      .order('created_at', { ascending: false });
+    if (error) throw fromPostgrestError(error);
+    return (data ?? []) as unknown as Center[];
+  });
+}
+
+/** Una página de centros aprobados + total, para carga incremental (lazy). */
+export interface CentersPage {
+  rows: Center[];
+  total: number;
+}
+
+/** Página de aprobados [offset, offset+limit). `total` viene del count exacto. */
+export function getApprovedCentersPage(offset: number, limit: number): Promise<CentersPage> {
+  return withRetry(async () => {
+    const { data, error, count } = await supabase
+      .from('centers')
+      .select(COLUMNS, { count: 'exact' })
+      .eq('is_approved', true)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (error) throw fromPostgrestError(error);
+    return { rows: (data ?? []) as unknown as Center[], total: count ?? 0 };
+  });
+}
+
 /** Aprueba un centro (lo hace visible al público). */
 export async function approveCenter(id: string): Promise<void> {
   const { error } = await supabase

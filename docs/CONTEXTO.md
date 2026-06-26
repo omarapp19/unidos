@@ -104,6 +104,7 @@ falta el flujo operativo para usarlo:
 
 2. **Alta de un nuevo admin.**
    - Flujo para que un superadmin cree/invite admins y los asigne a un centro.
+   - Tambien que el superadmin pueda registrar centros de acopio huerfanos, ya que vemos muchas publicaciones en redes de centros de acopio pero queremos centralizar la informacion
    - Opciones: invitación por correo (Supabase Auth admin API en una Edge
      Function con `service_role`) o auto-registro + asignación manual.
    - Necesita RPC/Edge Function con privilegios elevados (no exponer
