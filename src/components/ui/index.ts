@@ -13,6 +13,9 @@ export type { ModalProps } from './Modal';
 export { Input } from './Input';
 export type { InputProps } from './Input';
 
+export { AddressInput } from './AddressInput';
+export type { AddressInputProps } from './AddressInput';
+
 export { Select } from './Select';
 export type { SelectProps, SelectOption } from './Select';
 
