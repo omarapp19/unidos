@@ -452,8 +452,8 @@ export function PublicHome() {
               onClick={() => setSuggestModalOpen(true)}
               leftIcon={<Plus className="h-4 w-4" />}
             >
-              <span className="hidden sm:inline">Sugerir centro</span>
-              <span className="sm:hidden">Sugerir</span>
+              <span className="hidden sm:inline">Agregar nuevo centro</span>
+              <span className="sm:hidden">Agregar</span>
             </Button>
             <Link
               to="/admin/login"
