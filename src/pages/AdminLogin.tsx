@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MapPin, Mail, Lock, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
@@ -12,11 +12,21 @@ import { Button, Card, Input } from '@/components/ui';
 
 export function AdminLogin() {
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const { status, profile, signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Redirige solo cuando la sesión está resuelta (perfil cargado). No navegamos
+  // de forma imperativa tras signIn: el perfil/rol se resuelve async y hacerlo
+  // antes provocaba un rebote al login en el primer intento. El superadmin se
+  // reencamina en AdminLayout hacia /admin/super.
+  useEffect(() => {
+    if (status === 'authenticated' && profile) {
+      navigate('/admin', { replace: true });
+    }
+  }, [status, profile, navigate]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -28,10 +38,9 @@ export function AdminLogin() {
     setLoading(true);
     try {
       await signIn(email, password);
-      navigate('/admin/dashboard');
+      // El effect de arriba navega cuando el perfil queda resuelto.
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No pudimos iniciar sesión.');
-    } finally {
       setLoading(false);
     }
   }

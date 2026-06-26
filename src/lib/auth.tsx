@@ -56,6 +56,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Sesión válida pero perfil/centro aún sin resolver: marcar 'loading' para
+    // que los guards muestren spinner en vez de tratarla como no autenticada
+    // (evita el rebote al login en el primer intento tras iniciar sesión).
+    setStatus('loading');
+
     try {
       const prof = await getProfile(s.user.id);
       const ctr = prof?.center_id ? await getCenterById(prof.center_id) : null;
