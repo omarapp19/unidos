@@ -14,6 +14,7 @@ import { searchAddresses, type AddressSuggestion } from '@/lib/geo';
 
 export interface AddressInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onSelect'> {
   label?: string;
+  requiredMark?: boolean;
   error?: string;
   hint?: string;
   hideLabel?: boolean;
@@ -33,6 +34,7 @@ const DEBOUNCE_MS = 400;
  */
 export function AddressInput({
   label,
+  requiredMark,
   error,
   hint,
   hideLabel = false,
@@ -188,6 +190,7 @@ export function AddressInput({
           )}
         >
           {label}
+          {requiredMark && <span className="text-danger-ink"> *</span>}
         </label>
       )}
 

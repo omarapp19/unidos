@@ -15,3 +15,7 @@ export type { CategoryBarProps, CategoryBarColor } from './CategoryBar';
 
 export { Donut } from './Donut';
 export type { DonutProps, DonutSegment } from './Donut';
+
+export { SuggestCenterModal } from './SuggestCenterModal';
+export type { SuggestCenterModalProps } from './SuggestCenterModal';
+

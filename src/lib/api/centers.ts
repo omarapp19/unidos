@@ -181,3 +181,43 @@ export async function adminRegisterCenter(
   if (error) throw fromPostgrestError(error);
   return data as string;
 }
+
+/** Datos para sugerir un centro de acopio de forma pública. */
+export interface SuggestCenterInput {
+  name: string;
+  organization: string;
+  address: string;
+  lat: number;
+  lng: number;
+  phone?: string;
+  whatsapp?: string;
+  instagram?: string;
+  website?: string;
+  email?: string;
+  schedule?: string;
+}
+
+/** Registra una sugerencia de centro de acopio (is_approved=false) de forma pública. */
+export function suggestCenter(input: SuggestCenterInput): Promise<void> {
+  return withRetry(async () => {
+    const { error } = await supabase
+      .from('centers')
+      .insert({
+        name: input.name.trim(),
+        organization: input.organization.trim(),
+        address: input.address.trim(),
+        lat: input.lat,
+        lng: input.lng,
+        phone: input.phone?.trim() || '',
+        whatsapp: input.whatsapp?.trim() || '',
+        instagram: input.instagram?.trim() || '',
+        website: input.website?.trim() || '',
+        email: input.email?.trim() || '',
+        schedule: input.schedule?.trim() || '',
+        is_approved: false,
+        is_verified: false,
+      });
+    if (error) throw fromPostgrestError(error);
+  });
+}
+

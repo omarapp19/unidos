@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Building2, Plus, Check, Trash2, Pencil, BadgeCheck, AtSign, Globe, Mail } from 'lucide-react';
+import { Building2, Plus, Check, Trash2, Pencil, BadgeCheck, AtSign, Globe, Mail, Search } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import type { Center } from '@/types';
 import {
   getPendingCenters,
@@ -12,7 +15,7 @@ import {
   type CenterPatch,
 } from '@/lib/api/centers';
 import { toApiError, type ApiError } from '@/lib/api/errors';
-import { forwardGeocode } from '@/lib/geo';
+import { forwardGeocode, reverseGeocodeAddress } from '@/lib/geo';
 import { splitDial } from '@/lib/phone-codes';
 import {
   EMPTY_BLOCK,
@@ -38,6 +41,8 @@ import {
   Card,
   Modal,
   Input,
+  AddressInput,
+  Select,
   Checkbox,
   QueryBoundary,
   EmptyState,
@@ -59,6 +64,9 @@ type FormState = {
   instagram: string;
   website: string;
   email: string;
+  status: Center['status'];
+  lat: string;
+  lng: string;
 };
 
 type ErrorKey =
@@ -74,7 +82,53 @@ type Errors = Partial<Record<ErrorKey, string>>;
 
 const EMPTY_FORM: FormState = {
   name: '', organization: '', address: '', instagram: '', website: '', email: '',
+  status: 'receiving',
+  lat: '',
+  lng: '',
 };
+
+const pinIcon = L.divIcon({
+  className: '',
+  html: `<div style="
+    width: 30px; height: 30px;
+    background: var(--color-rojo);
+    border: 3px solid #fff; border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  "></div>`,
+  iconSize: [30, 30],
+  iconAnchor: [15, 30],
+});
+
+function LocationPickerMap({
+  lat,
+  lng,
+  onChange,
+}: {
+  lat: number;
+  lng: number;
+  onChange: (lat: number, lng: number) => void;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.panTo([lat, lng]);
+  }, [lat, lng, map]);
+
+  useMapEvents({
+    click(e) {
+      onChange(e.latlng.lat, e.latlng.lng);
+    },
+  });
+
+  return <Marker position={[lat, lng]} icon={pinIcon} />;
+}
+
+const STATUS_OPTIONS = [
+  { value: 'receiving', label: 'Abierto (Recibiendo donaciones)' },
+  { value: 'full', label: 'Lleno (Capacidad máxima)' },
+  { value: 'closed', label: 'Cerrado' },
+];
 
 const PAGE_SIZE = 10;
 
@@ -166,6 +220,25 @@ export function SuperCenters() {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  const handleMapClick = useCallback(async (latitude: number, longitude: number) => {
+    setForm((f) => ({
+      ...f,
+      lat: latitude.toFixed(6),
+      lng: longitude.toFixed(6),
+    }));
+    try {
+      const resolvedAddress = await reverseGeocodeAddress({ lat: latitude, lng: longitude });
+      if (resolvedAddress) {
+        setForm((f) => ({
+          ...f,
+          address: resolvedAddress,
+        }));
+      }
+    } catch (err) {
+      console.error('Error al resolver la dirección:', err);
+    }
+  }, []);
+
   /** Carga los estados estructurados (teléfono/horario/whatsapp) desde un centro. */
   function loadStructured(center?: Center) {
     if (!center) {
@@ -194,18 +267,21 @@ export function SuperCenters() {
     setFormError(null);
     setEditing('new');
   }
+  const close = useCallback(() => {
+    setEditing(null);
+  }, []);
   function openEdit(c: Center) {
     setForm({
       name: c.name, organization: c.organization, address: c.address,
       instagram: c.instagram ?? '', website: c.website ?? '', email: c.email ?? '',
+      status: c.status,
+      lat: String(c.lat),
+      lng: String(c.lng),
     });
     loadStructured(c);
     setErrors({});
     setFormError(null);
     setEditing(c);
-  }
-  function close() {
-    setEditing(null);
   }
 
   function validate(): Errors {
@@ -242,19 +318,39 @@ export function SuperCenters() {
     const instagram = form.instagram.trim() ? normalizeInstagram(form.instagram) : '';
     const website = form.website.trim() ? normalizeUrl(form.website) : '';
 
+    const latVal = parseFloat(form.lat);
+    const lngVal = parseFloat(form.lng);
+    const hasValidCoords = !isNaN(latVal) && !isNaN(lngVal);
+
     try {
-      const coords = await forwardGeocode(form.address);
-      if (editing === 'new') {
-        if (!coords) {
-          setFormError('No se pudo ubicar la dirección. Revísala e intenta de nuevo.');
+      let finalLat = hasValidCoords ? latVal : 0;
+      let finalLng = hasValidCoords ? lngVal : 0;
+
+      // Geocodifica solo si no hay coordenadas válidas, o si se cambió la dirección sin modificar las coordenadas
+      const addressChanged = editing !== 'new' && editing !== null && form.address.trim() !== editing.address;
+      const coordsUntouched = editing !== 'new' && editing !== null && form.lat === String(editing.lat) && form.lng === String(editing.lng);
+
+      if (!hasValidCoords || (addressChanged && coordsUntouched)) {
+        const coords = await forwardGeocode(form.address);
+        if (coords) {
+          finalLat = coords.lat;
+          finalLng = coords.lng;
+        } else if (!hasValidCoords) {
+          setFormError('No se pudo ubicar la dirección automáticamente. Por favor, ingresa Latitud y Longitud manualmente.');
           return;
         }
-        await create.mutate({
+      }
+
+      if (editing === 'new') {
+        const newId = await create.mutate({
           name: form.name, organization: form.organization, address: form.address,
           schedule: scheduleStr, phone: phoneStr, whatsapp: whatsappStr,
           instagram, website, email: form.email,
-          lat: coords.lat, lng: coords.lng, isApproved: true,
+          lat: finalLat, lng: finalLng, isApproved: true,
         });
+        if (form.status !== 'receiving') {
+          await updateCenterAdmin(newId, { status: form.status });
+        }
       } else if (editing !== null) {
         const patch: CenterPatch = {
           name: form.name.trim(), organization: form.organization.trim(),
@@ -262,12 +358,10 @@ export function SuperCenters() {
           phone: phoneStr || null, whatsapp: whatsappStr || null,
           instagram: instagram || null, website: website || null,
           email: form.email.trim() || null,
+          status: form.status,
+          lat: finalLat,
+          lng: finalLng,
         };
-        // Re-geocodifica solo si la dirección cambió y se pudo ubicar.
-        if (coords && form.address.trim() !== editing.address) {
-          patch.lat = coords.lat;
-          patch.lng = coords.lng;
-        }
         await update.mutate({ id: editing.id, patch });
       }
       close();
@@ -288,13 +382,36 @@ export function SuperCenters() {
     await remove.mutate(id);
     pendingQ.refetch();
   }
+  async function onDelete(id: string) {
+    if (!confirm('¿Estás seguro de eliminar permanentemente este centro de acopio? Se borrará todo su historial.')) return;
+    try {
+      await remove.mutate(id);
+      approvedList.reload();
+    } catch {
+      alert('No se pudo eliminar el centro de acopio.');
+    }
+  }
   async function onToggleVerified(c: Center) {
     await verify.mutate({ id: c.id, value: !c.is_verified });
     approvedList.reload();
   }
 
+  const [searchQuery, setSearchQuery] = useState('');
+
   const pending = pendingQ.data ?? [];
   const approved = approvedList.rows;
+
+  const filteredPending = pending.filter((c) =>
+    [c.name, c.organization, c.address, c.email].some((field) =>
+      (field ?? '').toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  );
+
+  const filteredApproved = approved.filter((c) =>
+    [c.name, c.organization, c.address, c.email].some((field) =>
+      (field ?? '').toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  );
 
   // Scroll infinito dentro del contenedor con scroll propio: carga la siguiente
   // página al asomar el centinela (root = el contenedor, no el viewport).
@@ -325,6 +442,16 @@ export function SuperCenters() {
         </Button>
       </header>
 
+      {/* Buscador */}
+      <div className="w-full max-w-md">
+        <Input
+          placeholder="Buscar por nombre, organización o dirección…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          leadingIcon={<Search className="h-4 w-4" aria-hidden />}
+        />
+      </div>
+
       {/* Pendientes */}
       <QueryBoundary
         loading={pendingQ.loading}
@@ -334,7 +461,7 @@ export function SuperCenters() {
       >
         <section className="flex flex-col gap-3">
           <h2 className="font-display text-h3 font-black text-ink">
-            Pendientes ({pending.length})
+            Pendientes ({filteredPending.length})
           </h2>
           {pending.length === 0 ? (
             <EmptyState
@@ -342,8 +469,10 @@ export function SuperCenters() {
               title="Sin centros pendientes"
               description="Cuando alguien registre un centro, aparecerá aquí para aprobarlo."
             />
+          ) : filteredPending.length === 0 ? (
+            <p className="text-xs text-muted font-body">No se encontraron centros pendientes que coincidan con la búsqueda.</p>
           ) : (
-            pending.map((c) => (
+            filteredPending.map((c) => (
               <Card key={c.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-display text-base font-black text-ink">{c.name}</p>
@@ -370,7 +499,10 @@ export function SuperCenters() {
           ref={scrollRef}
           className="scrollbar-thin flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-1"
         >
-          {approved.map((c) => (
+          {approved.length > 0 && filteredApproved.length === 0 && (
+            <p className="text-xs text-muted font-body py-2">No se encontraron centros aprobados que coincidan con la búsqueda.</p>
+          )}
+          {filteredApproved.map((c) => (
             <Card key={c.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
@@ -388,6 +520,8 @@ export function SuperCenters() {
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => openEdit(c)}
                   leftIcon={<Pencil className="h-4 w-4" />}>Editar</Button>
+                <Button size="sm" variant="ghost" className="text-danger hover:bg-danger-bg hover:text-danger-ink" onClick={() => onDelete(c.id)}
+                  leftIcon={<Trash2 className="h-4 w-4" />}>Eliminar</Button>
               </div>
             </Card>
           ))}
@@ -437,9 +571,76 @@ export function SuperCenters() {
           <Input label="Organización" requiredMark placeholder="Cruz Roja Venezolana"
             value={form.organization} onChange={(e) => set('organization', e.target.value)}
             error={errors.organization} />
-          <Input label="Dirección" requiredMark placeholder="Av. Francisco de Miranda, Caracas"
-            value={form.address} onChange={(e) => set('address', e.target.value)}
-            error={errors.address} />
+          <AddressInput
+            label="Dirección"
+            requiredMark
+            placeholder="Av. Francisco de Miranda, Caracas"
+            value={form.address}
+            onChange={(e) => set('address', e.target.value)}
+            onSelect={(address, lat, lng) => {
+              setForm((f) => ({
+                ...f,
+                address,
+                lat: lat.toFixed(6),
+                lng: lng.toFixed(6),
+              }));
+            }}
+            error={errors.address}
+          />
+
+          <div className="flex flex-col gap-1.5">
+            <label className="font-body text-sm font-semibold text-ink">
+              Ubicación en el mapa
+            </label>
+            <div className="h-48 w-full overflow-hidden rounded-xl border border-line z-0">
+              <MapContainer
+                center={[
+                  parseFloat(form.lat) || 10.4806,
+                  parseFloat(form.lng) || -66.9036
+                ]}
+                zoom={13}
+                scrollWheelZoom
+                style={{ height: '100%', width: '100%' }}
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                <LocationPickerMap
+                  lat={parseFloat(form.lat) || 10.4806}
+                  lng={parseFloat(form.lng) || -66.9036}
+                  onChange={handleMapClick}
+                />
+              </MapContainer>
+            </div>
+            <p className="font-body text-xs text-muted">
+              Haz clic en el mapa para situar el marcador. Esto actualizará las coordenadas y la dirección automáticamente.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Latitud (opcional)"
+              placeholder="Ej: 10.4806"
+              value={form.lat}
+              onChange={(e) => set('lat', e.target.value)}
+              hint="Se geocodifica automáticamente si se deja vacío."
+            />
+            <Input
+              label="Longitud (opcional)"
+              placeholder="Ej: -66.9036"
+              value={form.lng}
+              onChange={(e) => set('lng', e.target.value)}
+              hint="Se geocodifica automáticamente si se deja vacío."
+            />
+          </div>
+
+          <Select
+            label="Estado del centro"
+            options={STATUS_OPTIONS}
+            value={form.status}
+            onChange={(val) => set('status', val as any)}
+          />
 
           <ScheduleField
             label="Horario de recepción"

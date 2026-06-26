@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 import { Tags, Plus, Pencil, Trash2 } from 'lucide-react';
 import type { Category } from '@/types';
 import { getCategories } from '@/lib/api/categories';
@@ -37,9 +37,9 @@ export function SuperCategories() {
     setFormError(null);
     setEditing(c);
   }
-  function close() {
+  const close = useCallback(() => {
     setEditing(null);
-  }
+  }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();

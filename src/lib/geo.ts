@@ -184,3 +184,28 @@ export async function forwardGeocode(
     return null;
   }
 }
+
+/**
+ * Reverse-geocoding para obtener la dirección completa (display_name)
+ * a partir de coordenadas. Útil para rellenar el campo Dirección.
+ */
+export async function reverseGeocodeAddress(
+  { lat, lng }: LatLng,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  try {
+    const url =
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2` +
+      `&lat=${lat}&lon=${lng}&accept-language=es`;
+    const res = await fetch(url, {
+      signal,
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { display_name?: string };
+    return data.display_name ?? null;
+  } catch {
+    return null;
+  }
+}
+

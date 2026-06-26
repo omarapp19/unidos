@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, Stethoscope, TestTube, Pill, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle } from 'lucide-react';
+import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, Stethoscope, TestTube, Pill, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { nearest, sortByDistance, reverseGeocode, type LatLng, DEFAULT_LATLNG } from '@/lib/geo';
 import { categoryTotals } from '@/lib/stats';
@@ -16,6 +16,7 @@ import {
   CenterDetailModal,
   CategoryBar,
   type CategoryBarColor,
+  SuggestCenterModal,
 } from '@/components/domain';
 import { CenterMap } from '@/components/map/CenterMap';
 
@@ -243,6 +244,7 @@ export function PublicHome() {
   const [query, setQuery] = useState('');
   // Centro abierto en la ficha ampliada (contacto + redes). `null` = modal cerrado.
   const [detailCenter, setDetailCenter] = useState<Center | null>(null);
+  const [suggestModalOpen, setSuggestModalOpen] = useState(false);
 
   // Control para inicializar el centro más cercano una sola vez cuando
   // coincidan la disponibilidad de la ubicación y de los centros cargados.
@@ -442,7 +444,16 @@ export function PublicHome() {
               aria-label="Cambiar tema"
               leftIcon={theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             >
-              <span className="hidden sm:inline">{theme === 'dark' ? 'Claro' : 'Oscuro'}</span>
+              <span className="hidden md:inline">{theme === 'dark' ? 'Claro' : 'Oscuro'}</span>
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setSuggestModalOpen(true)}
+              leftIcon={<Plus className="h-4 w-4" />}
+            >
+              <span className="hidden sm:inline">Sugerir centro</span>
+              <span className="sm:hidden">Sugerir</span>
             </Button>
             <Link
               to="/admin/login"
@@ -1067,6 +1078,11 @@ export function PublicHome() {
         open={detailCenter !== null}
         onClose={() => setDetailCenter(null)}
         distanceKm={detailCenter ? kmById.get(detailCenter.id) ?? null : null}
+      />
+
+      <SuggestCenterModal
+        open={suggestModalOpen}
+        onClose={() => setSuggestModalOpen(false)}
       />
     </div>
   );

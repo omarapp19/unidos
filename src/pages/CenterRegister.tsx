@@ -78,7 +78,6 @@ export function CenterRegister() {
   // true cuando el alta requiere confirmar el correo antes de crear el centro.
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [selectedCoords, setSelectedCoords] = useState<LatLng | null>(null);
   const register = useMutation(registerCenter);
   const loading = register.loading;
 

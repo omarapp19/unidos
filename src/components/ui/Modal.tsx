@@ -24,6 +24,13 @@ export interface ModalProps {
 export function Modal({ open, onClose, title, subtitle, children, className }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // Enfoque inicial al abrir
+  useEffect(() => {
+    if (open) {
+      panelRef.current?.focus();
+    }
+  }, [open]);
+
   // Esc para cerrar + bloqueo del scroll de fondo mientras está abierto.
   useEffect(() => {
     if (!open) return;
@@ -33,7 +40,6 @@ export function Modal({ open, onClose, title, subtitle, children, className }: M
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    panelRef.current?.focus();
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
