@@ -1,0 +1,159 @@
+/* ===========================================================================
+   UNIDOS · Centros de Acopio Venezuela
+   Design tokens — CSS custom properties (tema claro + oscuro)
+   ---------------------------------------------------------------------------
+   :root  → tema claro (fuente de verdad del design system "Unidos").
+   .dark  → tema oscuro. EXTENSIÓN del DS (el export original es claro-only):
+            el tricolor de marca se mantiene; superficies, texto, bordes y
+            fondos de estado se invierten conservando la jerarquía y el
+            contraste AA. Los `-ink` se aclaran sobre fondos oscuros.
+   ========================================================================== */
+
+:root {
+  /* --- Marca · Tricolor ------------------------------------------------ */
+  --color-amarillo: #f4c021; /* energía   */
+  --color-azul: #1f6fd6; /* confianza */
+  --color-rojo: #e23b2e; /* acción    */
+
+  --color-amarillo-ink: #5a4500;
+  --color-azul-ink: #1a5cb4;
+  --color-rojo-ink: #a83327;
+
+  /* --- Superficie / fondo --------------------------------------------- */
+  --color-bg: #f4ede0; /* lienzo / stage      */
+  --color-surface: #fffaf1; /* tarjetas, inputs    */
+  --color-surface-2: #efe7d8; /* barras, encabezados */
+  --color-surface-3: #f1ead9; /* chips neutros       */
+  --color-overlay-bone: #e9d9bb; /* pista de gráficos   */
+
+  /* --- Texto ----------------------------------------------------------- */
+  --color-text: #211e19;
+  --color-text-body: #6e6557;
+  --color-text-muted: #8a8073;
+  --color-text-subtle: #a59a89;
+
+  /* --- Bordes ---------------------------------------------------------- */
+  --color-border: #e4dccd;
+  --color-border-soft: #e9e1d2;
+
+  /* --- Estado · disponibilidad de centros ------------------------------ */
+  --color-success: #2f9e5b; /* Activo  */
+  --color-success-ink: #23774a;
+  --color-success-bg: #e0f1e7;
+
+  --color-warning: #caa015; /* Lleno   */
+  --color-warning-ink: #8a6a12;
+  --color-warning-bg: #f7eccb;
+
+  --color-danger: #e23b2e; /* Cerrado */
+  --color-danger-ink: #a83327;
+  --color-danger-bg: #f7ddd9;
+
+  /* --- Tipografía ------------------------------------------------------ */
+  --font-display: 'Sora', system-ui, -apple-system, sans-serif;
+  --font-body: 'Mulish', system-ui, -apple-system, sans-serif;
+
+  --text-display: 62px;
+  --text-h1: 34px;
+  --text-h2: 26px;
+  --text-h3: 20px;
+  --text-lg: 19px;
+  --text-base: 15px;
+  --text-sm: 14px;
+  --text-xs: 13px;
+  --text-2xs: 12px;
+  --text-3xs: 11px;
+
+  --tracking-tight: -0.03em;
+  --tracking-snug: -0.02em;
+  --tracking-wide: 0.08em;
+  --tracking-eyb: 0.16em;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-black: 800;
+
+  /* --- Radios ---------------------------------------------------------- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-pill: 24px;
+  --radius-full: 9999px;
+
+  /* --- Espaciado (base 4) --------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* --- Sombras --------------------------------------------------------- */
+  --shadow-card: 0 14px 34px -16px rgba(160, 110, 40, 0.4);
+  --shadow-float: 0 40px 90px -36px rgba(120, 100, 70, 0.45);
+  --shadow-ring-azul: 0 0 0 6px rgba(31, 111, 214, 0.22);
+
+  /* --- Control alturas ------------------------------------------------- */
+  --control-h: 48px;
+  --control-h-sm: 30px;
+
+  color-scheme: light;
+}
+
+/* ===========================================================================
+   TEMA OSCURO
+   Se activa con la clase `.dark` en <html> (gestionada por ThemeProvider).
+   ========================================================================== */
+.dark {
+  /* Marca · tricolor: se conserva la identidad. Los `-ink` se aclaran para
+     poder usarse como texto sobre superficies oscuras. */
+  --color-amarillo: #f4c021;
+  --color-azul: #4f93e6;
+  --color-rojo: #ef5347;
+
+  --color-amarillo-ink: #f4c021;
+  --color-azul-ink: #8bb9f0;
+  --color-rojo-ink: #f0a097;
+
+  /* Superficie / fondo: marrón cálido oscuro (coherente con el "crema"). */
+  --color-bg: #1a1714;
+  --color-surface: #221e1a;
+  --color-surface-2: #2b2620;
+  --color-surface-3: #2f2922;
+  --color-overlay-bone: #3a3228;
+
+  /* Texto: invertido, manteniendo la jerarquía. */
+  --color-text: #f4ede0;
+  --color-text-body: #c4baa9;
+  --color-text-muted: #9b9182;
+  --color-text-subtle: #7d7466;
+
+  /* Bordes: tenues sobre oscuro. */
+  --color-border: #3a342b;
+  --color-border-soft: #322d25;
+
+  /* Estado: fondo (-bg) oscuro y profundo, texto (-ink) claro para contraste. */
+  --color-success: #3bb56c;
+  --color-success-ink: #7fd3a0;
+  --color-success-bg: #16301f;
+
+  --color-warning: #e3c45e;
+  --color-warning-ink: #e3c45e;
+  --color-warning-bg: #322a12;
+
+  --color-danger: #ef5347;
+  --color-danger-ink: #f0a097;
+  --color-danger-bg: #3a1a16;
+
+  /* Sombras: el "glow" cálido no funciona sobre oscuro → sombra neutra densa. */
+  --shadow-card: 0 14px 34px -16px rgba(0, 0, 0, 0.6);
+  --shadow-float: 0 40px 90px -36px rgba(0, 0, 0, 0.7);
+  --shadow-ring-azul: 0 0 0 6px rgba(79, 147, 230, 0.3);
+
+  color-scheme: dark;
+}

@@ -1,0 +1,77 @@
+/* ===========================================================================
+   UNIDOS · Tailwind v4 tokens (@theme)
+   Si usas Tailwind v4, importa este archivo en tu CSS principal:
+       @import "tailwindcss";
+       @import "./theme.css";
+   Genera utilidades como bg-azul, text-success-ink, rounded-pill, shadow-card…
+   =========================================================================== */
+
+@theme {
+  /* Marca · tricolor */
+  --color-amarillo:     #f4c021;
+  --color-amarillo-ink: #5a4500;
+  --color-azul:         #1f6fd6;
+  --color-azul-ink:     #1a5cb4;
+  --color-rojo:         #e23b2e;
+  --color-rojo-ink:     #a83327;
+
+  /* Superficie / fondo */
+  --color-bg:          #f4ede0;
+  --color-surface:     #fffaf1;
+  --color-surface-2:   #efe7d8;
+  --color-surface-3:   #f1ead9;
+  --color-bone:        #e9d9bb;
+
+  /* Texto */
+  --color-ink:     #211e19;
+  --color-body:    #6e6557;
+  --color-muted:   #8a8073;
+  --color-subtle:  #a59a89;
+
+  /* Bordes */
+  --color-line:      #e4dccd;
+  --color-line-soft: #e9e1d2;
+
+  /* Estado */
+  --color-success:     #2f9e5b;
+  --color-success-ink: #23774a;
+  --color-success-bg:  #e0f1e7;
+  --color-warning:     #caa015;
+  --color-warning-ink: #8a6a12;
+  --color-warning-bg:  #f7eccb;
+  --color-danger:      #e23b2e;
+  --color-danger-ink:  #a83327;
+  --color-danger-bg:   #f7ddd9;
+
+  /* Tipografía */
+  --font-display: 'Sora', system-ui, sans-serif;
+  --font-body:    'Mulish', system-ui, sans-serif;
+
+  --text-3xs: 11px;
+  --text-2xs: 12px;
+  --text-xs:  13px;
+  --text-sm:  14px;
+  --text-base: 15px;
+  --text-lg:  19px;
+  --text-h3:  20px;
+  --text-h2:  26px;
+  --text-h1:  34px;
+  --text-display: 62px;
+
+  --tracking-tightest: -0.03em;
+  --tracking-snug:     -0.02em;
+  --tracking-wide:      0.08em;
+  --tracking-eyebrow:   0.16em;
+
+  /* Radios */
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   14px;
+  --radius-xl:   18px;
+  --radius-pill: 24px;
+
+  /* Sombras */
+  --shadow-card:  0 14px 34px -16px rgba(160,110,40,.40);
+  --shadow-float: 0 40px 90px -36px rgba(120,100,70,.45);
+  --shadow-ring-azul: 0 0 0 6px rgba(31,111,214,.22);
+}

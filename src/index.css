@@ -1,0 +1,97 @@
+/* Tokens del design system (define :root y .dark). Importar antes de Tailwind. */
+@import './styles/tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    /* Transición suave al alternar tema claro/oscuro. */
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Anillo de foco accesible y consistente con la marca (azul = confianza). */
+  :focus-visible {
+    outline: 2px solid var(--color-azul);
+    outline-offset: 2px;
+  }
+}
+
+/* ===========================================================================
+   Impresión (reporte §3.C). Al imprimir/guardar PDF se oculta toda la app y se
+   deja solo el contenedor `.printable`, en blanco y negro, tamaño carta.
+   ========================================================================== */
+@media print {
+  @page {
+    size: letter;
+    margin: 1.5cm;
+  }
+
+  /* Oculta todo… */
+  body * {
+    visibility: hidden;
+  }
+
+  /* …salvo el reporte y su contenido. */
+  .printable,
+  .printable * {
+    visibility: visible;
+  }
+
+  .printable {
+    position: absolute;
+    inset: 0;
+    margin: 0 auto;
+    box-shadow: none;
+    color: #000 !important;
+    background: #fff !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+}
+
+/* Scrollbar fina y discreta (lista de centros). Aparece sutil y solo al pasar. */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
+    border-radius: 9999px;
+  }
+  .scrollbar-thin:hover::-webkit-scrollbar-thumb {
+    background-color: var(--color-text-subtle);
+  }
+}
+
+/* Apertura del menú del Select: extensión suave desde el input. */
+@keyframes selectIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scaleY(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
