@@ -94,3 +94,35 @@ export async function reverseGeocode(
     return null; // AbortError o red caída → el caller decide el fallback.
   }
 }
+
+/** Caracas como coordenada de respaldo si la geocodificación falla. */
+export const DEFAULT_LATLNG: LatLng = { lat: 10.4806, lng: -66.9036 };
+
+/**
+ * Forward-geocoding con Nominatim (OSM): convierte una dirección en coordenadas
+ * para ubicar un centro recién registrado en el mapa. Sin clave de API.
+ * Si la red falla o no hay resultados, devuelve `null` y el caller usa un
+ * respaldo (un coordinador puede ajustar la posición al aprobar el centro).
+ */
+export async function forwardGeocode(
+  address: string,
+  signal?: AbortSignal,
+): Promise<LatLng | null> {
+  const q = address.trim();
+  if (!q) return null;
+  try {
+    const url =
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1` +
+      `&accept-language=es&q=${encodeURIComponent(q)}`;
+    const res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Array<{ lat: string; lon: string }>;
+    const hit = data[0];
+    if (!hit) return null;
+    const lat = Number(hit.lat);
+    const lng = Number(hit.lon);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  } catch {
+    return null;
+  }
+}
