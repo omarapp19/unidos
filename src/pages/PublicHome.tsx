@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, Stethoscope, TestTube, Pill, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X } from 'lucide-react';
+import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, Stethoscope, TestTube, Pill, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X, Users } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { nearest, sortByDistance, reverseGeocode, type LatLng, DEFAULT_LATLNG } from '@/lib/geo';
 import { categoryTotals } from '@/lib/stats';
@@ -459,6 +459,13 @@ export function PublicHome() {
               Agregar nuevo centro
             </Button>
             <Link
+              to="/personas-desaparecidas"
+              className="inline-flex h-control-sm items-center justify-center gap-2 whitespace-nowrap rounded-pill bg-amber-600 px-4 font-display text-2xs font-black tracking-snug text-white transition hover:brightness-95 active:brightness-90"
+            >
+              <Users className="h-4 w-4" aria-hidden />
+              ¿Conoces personas desaparecidas?
+            </Link>
+            <Link
               to="/admin/login"
               className="inline-flex h-control-sm items-center justify-center gap-2 whitespace-nowrap rounded-pill bg-rojo px-4 font-display text-2xs font-black tracking-snug text-white transition hover:brightness-95 active:brightness-90"
             >
@@ -504,6 +511,14 @@ export function PublicHome() {
               >
                 Agregar nuevo centro
               </Button>
+              <Link
+                to="/personas-desaparecidas"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-pill bg-amber-600 px-5 font-display text-sm font-black tracking-snug text-white transition hover:brightness-95 active:brightness-90"
+              >
+                <Users className="h-4 w-4" aria-hidden />
+                ¿Conoces personas desaparecidas?
+              </Link>
               <Link
                 to="/admin/login"
                 onClick={() => setMobileMenuOpen(false)}

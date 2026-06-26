@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { PublicHome } from '@/pages/PublicHome';
+import { PersonasDesaparecidas } from '@/pages/PersonasDesaparecidas';
 import { AdminLogin } from '@/pages/AdminLogin';
 import { CenterRegister } from '@/pages/CenterRegister';
 import { AdminLayout } from '@/components/layout/AdminLayout';
@@ -19,6 +20,7 @@ import { SuperSupplies } from '@/pages/super/SuperSupplies';
 
 export const router = createBrowserRouter([
   { path: '/', element: <PublicHome /> },
+  { path: '/personas-desaparecidas', element: <PersonasDesaparecidas /> },
   { path: '/admin/login', element: <AdminLogin /> },
   { path: '/registro', element: <CenterRegister /> },
   {
