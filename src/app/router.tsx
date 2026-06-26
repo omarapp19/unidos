@@ -6,6 +6,10 @@ import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Dashboard } from '@/pages/admin/Dashboard';
 import { Donaciones } from '@/pages/admin/Donaciones';
 import { Historial } from '@/pages/admin/Historial';
+import { SuperLayout } from '@/components/layout/SuperLayout';
+import { RequireRole } from '@/components/layout/RequireRole';
+import { SuperCenters } from '@/pages/super/SuperCenters';
+import { SuperCategories } from '@/pages/super/SuperCategories';
 
 /* ===========================================================================
    Rutas del MVP (PRD). Público sin login en `/`; panel privado bajo `/admin`.
@@ -24,6 +28,19 @@ export const router = createBrowserRouter([
       { path: 'dashboard', element: <Dashboard /> },
       { path: 'donaciones', element: <Donaciones /> },
       { path: 'historial', element: <Historial /> },
+    ],
+  },
+  {
+    path: '/admin/super',
+    element: (
+      <RequireRole role="superadmin">
+        <SuperLayout />
+      </RequireRole>
+    ),
+    children: [
+      { index: true, element: <Navigate to="/admin/super/centros" replace /> },
+      { path: 'centros', element: <SuperCenters /> },
+      { path: 'categorias', element: <SuperCategories /> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

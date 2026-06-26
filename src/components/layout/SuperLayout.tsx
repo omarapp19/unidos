@@ -1,32 +1,20 @@
 import { useState } from 'react';
-import { NavLink, Outlet, Link, Navigate, useNavigate } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  PackagePlus,
-  History,
-  LogOut,
-  Menu,
-  X,
-  MapPin,
-  Sun,
-  Moon,
-} from 'lucide-react';
+import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
+import { Building2, Tags, LogOut, Menu, X, Shield, Sun, Moon } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
-import { Button, Spinner } from '@/components/ui';
+import { Button } from '@/components/ui';
 import { RoleBadge } from '@/components/ui/Badge';
 
 /* ===========================================================================
-   Layout del panel privado (PRD Módulo 3). Sidebar en desktop, menú colapsable
-   en mobile. Renderiza la sección activa vía <Outlet>. Cabecera con el centro
-   que gestiona el admin logueado (mock currentProfile/currentCenter).
+   Layout del panel de superadmin. Rutas separadas del panel de centro; el
+   acceso lo controla <RequireRole role="superadmin"> en el router.
    ========================================================================== */
 
 const NAV = [
-  { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/admin/donaciones', label: 'Recepción', icon: PackagePlus },
-  { to: '/admin/historial', label: 'Historial', icon: History },
+  { to: '/admin/super/centros', label: 'Centros', icon: Building2 },
+  { to: '/admin/super/categorias', label: 'Categorías', icon: Tags },
 ];
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
@@ -40,9 +28,7 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
           className={({ isActive }) =>
             cn(
               'flex items-center gap-3 rounded-lg px-3 py-2.5 font-body text-sm font-semibold transition',
-              isActive
-                ? 'bg-rojo text-white'
-                : 'text-body hover:bg-surface-2 hover:text-ink',
+              isActive ? 'bg-rojo text-white' : 'text-body hover:bg-surface-2 hover:text-ink',
             )
           }
         >
@@ -54,10 +40,10 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function AdminLayout() {
+export function SuperLayout() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const { status, profile, center, signOut } = useAuth();
+  const { profile, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -65,28 +51,10 @@ export function AdminLayout() {
     navigate('/admin/login');
   };
 
-  const centerName = center?.name ?? 'Tu centro';
-  const adminName = profile?.full_name ?? 'Administrador';
-
-  // Guard de ruta: espera la resolución de la sesión; si no hay, va al login.
-  if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-bg">
-        <Spinner label="Cargando tu panel…" />
-      </div>
-    );
-  }
-  if (status === 'unauthenticated') {
-    return <Navigate to="/admin/login" replace />;
-  }
-  if (profile?.role === 'superadmin') {
-    return <Navigate to="/admin/super" replace />;
-  }
-
   const Brand = (
-    <Link to="/admin/dashboard" className="flex items-center gap-2">
+    <Link to="/admin/super/centros" className="flex items-center gap-2">
       <span className="flex h-8 w-8 items-center justify-center rounded-md bg-rojo text-white">
-        <MapPin className="h-5 w-5" aria-hidden />
+        <Shield className="h-5 w-5" aria-hidden />
       </span>
       <span className="font-display text-h3 font-black tracking-snug text-ink">Unidos</span>
     </Link>
@@ -94,19 +62,15 @@ export function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-bg lg:flex">
-      {/* Sidebar desktop */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-line-soft bg-surface p-4 lg:flex">
         <div className="mb-6">{Brand}</div>
         <div className="mb-4 rounded-lg bg-surface-2 p-3">
           <p className="font-display text-sm font-black tracking-snug text-ink">
-            {centerName}
+            {profile?.full_name ?? 'Superadmin'}
           </p>
-          <p className="mt-0.5 font-body text-xs text-muted">{adminName}</p>
-          {profile?.role && (
-            <div className="mt-2">
-              <RoleBadge role={profile.role} />
-            </div>
-          )}
+          <div className="mt-2">
+            <RoleBadge role="superadmin" />
+          </div>
         </div>
         <NavItems />
         <div className="mt-auto flex flex-col gap-2 pt-4">
@@ -124,7 +88,6 @@ export function AdminLayout() {
         </div>
       </aside>
 
-      {/* Topbar mobile */}
       <div className="flex flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line-soft bg-surface px-4 py-3 lg:hidden">
           {Brand}
@@ -140,10 +103,6 @@ export function AdminLayout() {
 
         {mobileOpen && (
           <div className="border-b border-line-soft bg-surface px-4 py-4 lg:hidden">
-            <div className="mb-3 rounded-lg bg-surface-2 p-3">
-              <p className="font-display text-sm font-black text-ink">{centerName}</p>
-              <p className="font-body text-xs text-muted">{adminName}</p>
-            </div>
             <NavItems onNavigate={() => setMobileOpen(false)} />
             <div className="mt-3 flex gap-2">
               <Button variant="ghost" size="sm" onClick={toggleTheme} className="flex-1"
