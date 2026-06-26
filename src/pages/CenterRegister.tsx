@@ -11,10 +11,10 @@ import {
   Clock,
   CheckCircle2,
 } from 'lucide-react';
-import { Button, Card, Input } from '@/components/ui';
+import { Button, Card, Input, AddressInput } from '@/components/ui';
 import { useMutation } from '@/lib/hooks/useMutation';
 import { registerCenter } from '@/lib/api/auth';
-import { forwardGeocode, DEFAULT_LATLNG } from '@/lib/geo';
+import { DEFAULT_LATLNG, type LatLng } from '@/lib/geo';
 
 /* ===========================================================================
    Registro de un centro de acopio (PRD Módulo 2 · alta de cuenta).
@@ -56,11 +56,17 @@ export function CenterRegister() {
   // true cuando el alta requiere confirmar el correo antes de crear el centro.
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [selectedCoords, setSelectedCoords] = useState<LatLng | null>(null);
   const register = useMutation(registerCenter);
   const loading = register.loading;
 
   function set<K extends keyof Fields>(key: K, value: string) {
     setFields((f) => ({ ...f, [key]: value }));
+  }
+
+  function handleAddressSelect(address: string, lat: number, lng: number) {
+    set('address', address);
+    setSelectedCoords({ lat, lng });
   }
 
   function validate(): Errors {
@@ -86,9 +92,7 @@ export function CenterRegister() {
     if (Object.keys(e).length > 0) return;
 
     try {
-      // Geocodifica la dirección para ubicar el centro en el mapa. Si falla,
-      // usa un respaldo (un coordinador puede ajustar la posición al aprobar).
-      const coords = (await forwardGeocode(fields.address)) ?? DEFAULT_LATLNG;
+      const coords = selectedCoords ?? DEFAULT_LATLNG;
       const result = await register.mutate({
         email: fields.email,
         password: fields.password,
@@ -175,12 +179,12 @@ export function CenterRegister() {
                   onChange={(e) => set('organization', e.target.value)}
                   error={errors.organization}
                 />
-                <Input
+                <AddressInput
                   label="Dirección"
                   placeholder="Av. Francisco de Miranda, Chacao, Caracas"
-                  leadingIcon={<MapPin className="h-4 w-4" aria-hidden />}
                   value={fields.address}
                   onChange={(e) => set('address', e.target.value)}
+                  onSelect={handleAddressSelect}
                   error={errors.address}
                 />
                 <Input
