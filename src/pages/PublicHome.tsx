@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
-import { nearest, sortByDistance, formatDistance, reverseGeocode, type LatLng } from '@/lib/geo';
+import { nearest, sortByDistance, reverseGeocode, type LatLng } from '@/lib/geo';
 import { categoryTotals } from '@/lib/stats';
 import { useQuery } from '@/lib/hooks/useQuery';
 import { getApprovedCenters } from '@/lib/api/centers';
@@ -28,24 +28,13 @@ import { CenterMap } from '@/components/map/CenterMap';
 
 const BAR_COLORS: CategoryBarColor[] = ['azul', 'amarillo', 'rojo', 'success'];
 
-/** Cuántos centros (además del destacado) se cargan por tanda al scrollear. */
+/** Cuántos centros se cargan por tanda al scrollear. */
 const PAGE_SIZE = 6;
 
 /** Zona mostrada en el header antes de detectar la ubicación del visitante. */
 const DEFAULT_LOCATION = 'Chacao, Caracas';
 
 type GeoState = 'idle' | 'loading' | 'granted' | 'denied';
-
-/** Barra tricolor de marca (amarillo · azul · rojo). */
-function Tricolor({ className = '' }: { className?: string }) {
-  return (
-    <div className={`flex h-1.5 w-full overflow-hidden rounded-full ${className}`}>
-      <span className="flex-1 bg-amarillo" />
-      <span className="flex-1 bg-azul" />
-      <span className="flex-1 bg-rojo" />
-    </div>
-  );
-}
 
 export function PublicHome() {
   const { theme, toggleTheme } = useTheme();
@@ -63,7 +52,7 @@ export function PublicHome() {
   // Zona detectada (reverse-geocoding) que se muestra en el header. Por defecto, la
   // ciudad base del proyecto hasta que el usuario comparta su ubicación.
   const [locationLabel, setLocationLabel] = useState<string>(DEFAULT_LOCATION);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
   const [flyTo, setFlyTo] = useState<LatLng | null>(null);
   const [query, setQuery] = useState('');
   // Centro abierto en la ficha ampliada (contacto + redes). `null` = modal cerrado.
@@ -89,20 +78,11 @@ export function PublicHome() {
     return m;
   }, [ranked]);
 
-  const nearestId = userPos ? nearest(userPos, approvedCenters)?.item.id ?? null : null;
-  const featuredId = selectedId ?? nearestId ?? ranked[0]?.item.id ?? null;
-  const featured = ranked.find((r) => r.item.id === featuredId) ?? ranked[0];
-  const isNearest = featured?.item.id === nearestId;
-
-  // Lazy loading: el resto de centros se carga por tandas al llegar al final.
-  const rest = useMemo(
-    () => ranked.filter((r) => r.item.id !== featuredId),
-    [ranked, featuredId],
-  );
+  // Lazy loading: centros se cargan por tandas al llegar al final.
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const visibleRest = rest.slice(0, visibleCount);
-  const hasMore = visibleCount < rest.length;
+  const visibleCenters = ranked.slice(0, visibleCount);
+  const hasMore = visibleCount < ranked.length;
 
   // Reinicia la tanda cuando cambia el filtro/orden (búsqueda o ubicación).
   useEffect(() => {
@@ -122,7 +102,7 @@ export function PublicHome() {
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [hasMore, visibleRest.length]);
+  }, [hasMore, visibleCenters.length]);
 
   // Gráfico de la red: solo ítems (sin tocar donaciones → nombres privados).
   const publicTotals = useMemo(
@@ -151,7 +131,7 @@ export function PublicHome() {
         setGeoState('granted');
         const near = nearest(p, approvedCenters);
         if (near) {
-          setSelectedId(near.item.id);
+          setMapSelectedId(near.item.id);
           setFlyTo({ lat: near.item.lat, lng: near.item.lng });
         }
         // Header dinámico: resuelve la zona detectada (OSM); si falla, mantiene la zona
@@ -178,7 +158,7 @@ export function PublicHome() {
   }
 
   function selectCenter(center: Center) {
-    setSelectedId(center.id);
+    setMapSelectedId(center.id);
     setFlyTo({ lat: center.lat, lng: center.lng });
   }
 
@@ -258,7 +238,7 @@ export function PublicHome() {
       </section>
 
       {/* Lista (dominante) + mapa (apoyo) */}
-      <section className="mx-auto mt-5 grid w-full max-w-6xl flex-1 gap-4 px-4 lg:grid-cols-[1.25fr_1fr]">
+      <section className="mx-auto mt-5 flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 lg:grid lg:grid-cols-[1.25fr_1fr]">
         {/* Lista */}
         <div className="scrollbar-thin order-2 flex flex-col gap-3 lg:order-1 lg:sticky lg:top-20 lg:max-h-[70vh] lg:overflow-y-auto lg:pr-1">
           <QueryBoundary
@@ -267,31 +247,10 @@ export function PublicHome() {
             onRetry={centersQuery.refetch}
             loadingLabel="Cargando centros…"
           >
-          {featured ? (
+          {visibleCenters.length > 0 ? (
             <>
-              {/* Más cercano / seleccionado: resaltado con barra tricolor */}
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="font-body text-2xs font-bold uppercase tracking-eyebrow text-subtle">
-                    {isNearest ? 'Más cercano' : 'Seleccionado'}
-                    {featured.km != null && ` · ${formatDistance(featured.km)}`}
-                  </p>
-                </div>
-                <div className="overflow-hidden rounded-xl">
-                  <Tricolor className="rounded-none" />
-                  <CenterCard
-                    center={featured.item}
-                    distanceKm={featured.km}
-                    onDetails={() => setDetailCenter(featured.item)}
-                    highlighted
-                    className="rounded-t-none"
-                  />
-                </div>
-              </div>
-
-              {/* Resto de centros (lazy loading por tandas) */}
               <div className="flex flex-col gap-2">
-                {visibleRest.map(({ item, km }) => (
+                {visibleCenters.map(({ item, km }) => (
                   <CenterCard
                     key={item.id}
                     center={item}
@@ -303,7 +262,6 @@ export function PublicHome() {
                 ))}
               </div>
 
-              {/* Centinela: al entrar en vista carga la siguiente tanda. */}
               {hasMore && (
                 <div ref={sentinelRef} className="flex justify-center py-3">
                   <Spinner size="sm" label="Cargando más centros…" />
@@ -323,12 +281,12 @@ export function PublicHome() {
         </div>
 
         {/* Mapa de apoyo */}
-        <div className="order-1 lg:order-2">
+        <div className="order-1 lg:order-2 sticky top-20 z-10 lg:static lg:z-0">
           <div className="h-52 overflow-hidden rounded-xl border border-line-soft shadow-card lg:sticky lg:top-20 lg:h-[70vh]">
             <CenterMap
               centers={approvedCenters}
               userPosition={userPos}
-              selectedId={featuredId}
+              selectedId={mapSelectedId}
               flyTo={flyTo}
               onSelect={selectCenter}
             />
