@@ -95,8 +95,66 @@ export async function reverseGeocode(
   }
 }
 
+/**
+ * Resultado del forward-geocoding con display name completo para el
+ * autocomplete de direcciones.
+ */
+export interface AddressSuggestion {
+  displayName: string;
+  lat: number;
+  lng: number;
+}
+
+/**
+ * Búsqueda de direcciones con Nominatim (OSM). Devuelve hasta 5 sugerencias
+ * para el autocomplete del formulario de registro.
+ * Sin clave de API. Respeta la política de uso: 1 req/seg (el caller debe
+ * debounce).
+ */
+export async function searchAddresses(
+  query: string,
+  signal?: AbortSignal,
+): Promise<AddressSuggestion[]> {
+  const q = query.trim();
+  if (q.length < 3) return [];
+  try {
+    const url =
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5` +
+      `&accept-language=es&countrycodes=ve&q=${encodeURIComponent(q)}`;
+    const res = await fetch(url, {
+      signal,
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+    if (!res.ok) {
+      throw new Error(`Error de red (HTTP ${res.status})`);
+    }
+    const data = (await res.json()) as Array<{
+      display_name: string;
+      lat: string;
+      lon: string;
+    }>;
+    return data
+      .map((d) => ({
+        displayName: d.display_name,
+        lat: Number(d.lat),
+        lng: Number(d.lon),
+      }))
+      .filter((d) => Number.isFinite(d.lat) && Number.isFinite(d.lng));
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      // Si la petición fue abortada por una nueva pulsación de tecla, no es un error real para mostrar.
+      throw error;
+    }
+    console.error('[Nominatim API Error] Failed to fetch suggestions:', error);
+    throw error;
+  }
+}
+
 /** Caracas como coordenada de respaldo si la geocodificación falla. */
 export const DEFAULT_LATLNG: LatLng = { lat: 10.4806, lng: -66.9036 };
+
 
 /**
  * Forward-geocoding con Nominatim (OSM): convierte una dirección en coordenadas
@@ -113,7 +171,7 @@ export async function forwardGeocode(
   try {
     const url =
       `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1` +
-      `&accept-language=es&q=${encodeURIComponent(q)}`;
+      `&accept-language=es&countrycodes=ve&q=${encodeURIComponent(q)}`;
     const res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
     if (!res.ok) return null;
     const data = (await res.json()) as Array<{ lat: string; lon: string }>;
