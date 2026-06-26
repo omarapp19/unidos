@@ -47,7 +47,9 @@ export function CenterCard({
   className,
 }: CenterCardProps) {
   const { name, address, schedule, status, lat, lng, organization, is_verified } = center;
-  const directions = buildDirectionsUrl(lat, lng, name);
+  // El nombre es opcional; si falta, mostramos la organización como título.
+  const title = name?.trim() || organization;
+  const directions = buildDirectionsUrl(lat, lng, title);
 
   return (
     <Card
@@ -60,11 +62,13 @@ export function CenterCard({
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <h3 className="truncate font-display text-h3 font-black tracking-snug text-ink">
-              {name}
+              {title}
             </h3>
             {is_verified && <VerifiedBadge variant="icon" />}
           </div>
-          <p className="mt-0.5 font-body text-xs text-muted">{organization}</p>
+          {name?.trim() && (
+            <p className="mt-0.5 font-body text-xs text-muted">{organization}</p>
+          )}
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           <CenterStatusBadge status={status} />
