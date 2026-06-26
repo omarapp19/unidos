@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, Link, Navigate, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   PackagePlus,
@@ -13,8 +13,8 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
-import { currentProfile, currentCenter } from '@/lib/mock-data';
-import { Button } from '@/components/ui';
+import { useAuth } from '@/lib/auth';
+import { Button, Spinner } from '@/components/ui';
 import { RoleBadge } from '@/components/ui/Badge';
 
 /* ===========================================================================
@@ -57,9 +57,28 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
 export function AdminLayout() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { status, profile, center, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const handleLogout = () => navigate('/admin/login');
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/admin/login');
+  };
+
+  const centerName = center?.name ?? 'Tu centro';
+  const adminName = profile?.full_name ?? 'Administrador';
+
+  // Guard de ruta: espera la resolución de la sesión; si no hay, va al login.
+  if (status === 'loading') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg">
+        <Spinner label="Cargando tu panel…" />
+      </div>
+    );
+  }
+  if (status === 'unauthenticated') {
+    return <Navigate to="/admin/login" replace />;
+  }
 
   const Brand = (
     <Link to="/admin/dashboard" className="flex items-center gap-2">
@@ -77,12 +96,14 @@ export function AdminLayout() {
         <div className="mb-6">{Brand}</div>
         <div className="mb-4 rounded-lg bg-surface-2 p-3">
           <p className="font-display text-sm font-black tracking-snug text-ink">
-            {currentCenter.name}
+            {centerName}
           </p>
-          <p className="mt-0.5 font-body text-xs text-muted">{currentProfile.full_name}</p>
-          <div className="mt-2">
-            <RoleBadge role={currentProfile.role} />
-          </div>
+          <p className="mt-0.5 font-body text-xs text-muted">{adminName}</p>
+          {profile?.role && (
+            <div className="mt-2">
+              <RoleBadge role={profile.role} />
+            </div>
+          )}
         </div>
         <NavItems />
         <div className="mt-auto flex flex-col gap-2 pt-4">
@@ -117,8 +138,8 @@ export function AdminLayout() {
         {mobileOpen && (
           <div className="border-b border-line-soft bg-surface px-4 py-4 lg:hidden">
             <div className="mb-3 rounded-lg bg-surface-2 p-3">
-              <p className="font-display text-sm font-black text-ink">{currentCenter.name}</p>
-              <p className="font-body text-xs text-muted">{currentProfile.full_name}</p>
+              <p className="font-display text-sm font-black text-ink">{centerName}</p>
+              <p className="font-body text-xs text-muted">{adminName}</p>
             </div>
             <NavItems onNavigate={() => setMobileOpen(false)} />
             <div className="mt-3 flex gap-2">

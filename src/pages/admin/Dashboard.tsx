@@ -1,15 +1,17 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Users, Boxes, Tag, Layers, PackagePlus } from 'lucide-react';
-import { categories, currentCenter, currentProfile } from '@/lib/mock-data';
-import { useData } from '@/lib/store';
+import { useAuth } from '@/lib/auth';
+import { useQuery } from '@/lib/hooks/useQuery';
+import { getCategories } from '@/lib/api/categories';
+import { getCenterDonations } from '@/lib/api/donations';
 import {
   centerMetricsForDay,
   categoryTotals,
   topCategory,
   totalQuantityForCenter,
 } from '@/lib/stats';
-import { Button, Card } from '@/components/ui';
+import { Button, Card, QueryBoundary } from '@/components/ui';
 import { CenterStatusBadge } from '@/components/ui/Badge';
 import { StatWidget, Donut } from '@/components/domain';
 
@@ -23,14 +25,23 @@ const BAR_FILL = ['bg-azul', 'bg-amarillo', 'bg-rojo', 'bg-success'] as const;
    - Mosaico de categorías con cantidades exactas (privado) + mini barra.
    ========================================================================== */
 
-const TODAY = new Date('2026-06-25T12:00:00');
-
 export function Dashboard() {
-  const { donations, donationItems } = useData();
-  const centerId = currentProfile.center_id;
+  const { profile, center } = useAuth();
+  const centerId = profile?.center_id ?? '';
+
+  const categoriesQuery = useQuery(getCategories, []);
+  const donationsQuery = useQuery(
+    () => getCenterDonations(centerId),
+    [centerId],
+    centerId !== '',
+  );
+
+  const categories = categoriesQuery.data ?? [];
+  const donations = donationsQuery.data?.donations ?? [];
+  const donationItems = donationsQuery.data?.items ?? [];
 
   const metrics = useMemo(
-    () => centerMetricsForDay(donations, centerId, TODAY),
+    () => centerMetricsForDay(donations, centerId, new Date()),
     [donations, centerId],
   );
 
@@ -74,9 +85,9 @@ export function Dashboard() {
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <h1 className="font-display text-h1 font-black tracking-tightest text-ink">
-              {currentCenter.name}
+              {center?.name ?? 'Tu centro'}
             </h1>
-            <CenterStatusBadge status={currentCenter.status} />
+            {center && <CenterStatusBadge status={center.status} />}
           </div>
         </div>
         <Link to="/admin/donaciones">
@@ -86,6 +97,15 @@ export function Dashboard() {
         </Link>
       </header>
 
+      <QueryBoundary
+        loading={donationsQuery.loading || categoriesQuery.loading}
+        error={donationsQuery.error ?? categoriesQuery.error}
+        onRetry={() => {
+          donationsQuery.refetch();
+          categoriesQuery.refetch();
+        }}
+        loadingLabel="Cargando tu panel…"
+      >
       {/* Métricas */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatWidget icon={<Users className="h-5 w-5" />} value={metrics.donorsToday} label="Donantes hoy" />
@@ -153,6 +173,7 @@ export function Dashboard() {
           )}
         </Card>
       </div>
+      </QueryBoundary>
     </div>
   );
 }

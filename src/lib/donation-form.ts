@@ -6,7 +6,6 @@
    - Construcción del payload Donation + DonationItem[] listo para persistir.
    ========================================================================== */
 
-import type { Donation, DonationItem } from '@/types';
 import type { DonationRowValue } from '@/components/domain';
 
 /** Fila vacía nueva. */
@@ -112,53 +111,4 @@ export function validateDonationForm(rows: DonationRowValue[]): DonationFormErro
 /** ¿El resultado de validar está limpio? */
 export function isFormValid(errors: DonationFormErrors): boolean {
   return !errors.form && Object.keys(errors.rows).length === 0;
-}
-
-/* --- Construcción del payload ----------------------------------------- */
-
-export interface NewDonationInput {
-  centerId: string;
-  /** Profile que registra. */
-  createdBy: string;
-  /** Nombre del donante; vacío/espacios ⇒ anónimo. */
-  donorName: string;
-  rows: DonationRowValue[];
-}
-
-export interface NewDonationPayload {
-  donation: Donation;
-  items: DonationItem[];
-}
-
-/**
- * Construye el payload (Donation + items) a partir del input ya validado.
- * Genera ids/fechas en cliente para el mock; con Supabase los daría la BD.
- * Solo incluye filas completas.
- */
-export function buildDonationPayload(input: NewDonationInput): NewDonationPayload {
-  const trimmedName = input.donorName.trim();
-  const isAnonymous = trimmedName === '';
-  const now = new Date().toISOString();
-  const donationId = `don-${Date.now()}`;
-
-  const donation: Donation = {
-    id: donationId,
-    center_id: input.centerId,
-    donor_name: isAnonymous ? null : trimmedName,
-    is_anonymous: isAnonymous,
-    created_at: now,
-    created_by: input.createdBy,
-  };
-
-  const items: DonationItem[] = input.rows
-    .filter(isRowComplete)
-    .map((row, i) => ({
-      id: `${donationId}-it-${i}`,
-      donation_id: donationId,
-      category_id: row.categoryId,
-      product: row.product.trim(),
-      quantity: Number(row.quantity),
-    }));
-
-  return { donation, items };
 }

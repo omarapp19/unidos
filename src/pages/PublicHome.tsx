@@ -2,16 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
-import {
-  approvedCenters,
-  urgentSuppliesByCenter,
-  categories,
-} from '@/lib/mock-data';
 import { nearest, sortByDistance, formatDistance, reverseGeocode, type LatLng } from '@/lib/geo';
 import { categoryTotals } from '@/lib/stats';
-import { useData } from '@/lib/store';
+import { useQuery } from '@/lib/hooks/useQuery';
+import { getApprovedCenters } from '@/lib/api/centers';
+import { getCategories } from '@/lib/api/categories';
+import { getNetworkDonationItems } from '@/lib/api/donations';
 import type { Center } from '@/types';
-import { Button, Card, Badge, Input, EmptyState, Spinner } from '@/components/ui';
+import { Button, Card, Badge, Input, EmptyState, Spinner, QueryBoundary } from '@/components/ui';
 import {
   CenterCard,
   CenterDetailModal,
@@ -51,7 +49,14 @@ function Tricolor({ className = '' }: { className?: string }) {
 
 export function PublicHome() {
   const { theme, toggleTheme } = useTheme();
-  const { donations, donationItems } = useData();
+  // Datos reales (Supabase). Lectura pública vía RLS: centros aprobados,
+  // catálogo de categorías e ítems de toda la red para el gráfico.
+  const centersQuery = useQuery(getApprovedCenters, []);
+  const categoriesQuery = useQuery(getCategories, []);
+  const itemsQuery = useQuery(getNetworkDonationItems, []);
+  const approvedCenters = centersQuery.data ?? [];
+  const categories = categoriesQuery.data ?? [];
+  const donationItems = itemsQuery.data ?? [];
   const [userPos, setUserPos] = useState<LatLng | null>(null);
   const [geoState, setGeoState] = useState<GeoState>('idle');
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -75,7 +80,7 @@ export function PublicHome() {
       ({ item }) =>
         item.name.toLowerCase().includes(q) || item.address.toLowerCase().includes(q),
     );
-  }, [userPos, query]);
+  }, [userPos, query, approvedCenters]);
 
   // Distancia (km) por id de centro, para pintarla en cada tarjeta/ficha.
   const kmById = useMemo(() => {
@@ -119,9 +124,10 @@ export function PublicHome() {
     return () => obs.disconnect();
   }, [hasMore, visibleRest.length]);
 
+  // Gráfico de la red: solo ítems (sin tocar donaciones → nombres privados).
   const publicTotals = useMemo(
-    () => categoryTotals(donations, donationItems, categories).filter((t) => t.quantity > 0),
-    [donations, donationItems],
+    () => categoryTotals([], donationItems, categories).filter((t) => t.quantity > 0),
+    [donationItems, categories],
   );
 
   function locateMe() {
@@ -255,6 +261,12 @@ export function PublicHome() {
       <section className="mx-auto mt-5 grid w-full max-w-6xl flex-1 gap-4 px-4 lg:grid-cols-[1.25fr_1fr]">
         {/* Lista */}
         <div className="scrollbar-thin order-2 flex flex-col gap-3 lg:order-1 lg:sticky lg:top-20 lg:max-h-[70vh] lg:overflow-y-auto lg:pr-1">
+          <QueryBoundary
+            loading={centersQuery.loading}
+            error={centersQuery.error}
+            onRetry={centersQuery.refetch}
+            loadingLabel="Cargando centros…"
+          >
           {featured ? (
             <>
               {/* Más cercano / seleccionado: resaltado con barra tricolor */}
@@ -269,7 +281,6 @@ export function PublicHome() {
                   <Tricolor className="rounded-none" />
                   <CenterCard
                     center={featured.item}
-                    urgentSupplies={urgentSuppliesByCenter[featured.item.id]}
                     distanceKm={featured.km}
                     onDetails={() => setDetailCenter(featured.item)}
                     highlighted
@@ -284,7 +295,6 @@ export function PublicHome() {
                   <CenterCard
                     key={item.id}
                     center={item}
-                    urgentSupplies={urgentSuppliesByCenter[item.id]}
                     distanceKm={km}
                     compact
                     onSelect={() => selectCenter(item)}
@@ -309,6 +319,7 @@ export function PublicHome() {
               />
             </Card>
           )}
+          </QueryBoundary>
         </div>
 
         {/* Mapa de apoyo */}
@@ -338,20 +349,30 @@ export function PublicHome() {
             Proporción por categoría en todos los centros. Solo porcentajes — sin marcas
             ni cantidades exactas.
           </p>
-          {publicTotals.length > 0 ? (
-            <div className="flex flex-col gap-4">
-              {publicTotals.map((t, i) => (
-                <CategoryBar
-                  key={t.category.id}
-                  label={t.category.name}
-                  percentage={t.percentage}
-                  color={BAR_COLORS[i % BAR_COLORS.length]}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="Aún no hay datos" description="Todavía no se han registrado donaciones." />
-          )}
+          <QueryBoundary
+            loading={itemsQuery.loading || categoriesQuery.loading}
+            error={itemsQuery.error ?? categoriesQuery.error}
+            onRetry={() => {
+              itemsQuery.refetch();
+              categoriesQuery.refetch();
+            }}
+            loadingLabel="Cargando estadísticas…"
+          >
+            {publicTotals.length > 0 ? (
+              <div className="flex flex-col gap-4">
+                {publicTotals.map((t, i) => (
+                  <CategoryBar
+                    key={t.category.id}
+                    label={t.category.name}
+                    percentage={t.percentage}
+                    color={BAR_COLORS[i % BAR_COLORS.length]}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="Aún no hay datos" description="Todavía no se han registrado donaciones." />
+            )}
+          </QueryBoundary>
         </Card>
 
         <div className="mt-6 flex items-center justify-center">
@@ -365,7 +386,6 @@ export function PublicHome() {
         open={detailCenter !== null}
         onClose={() => setDetailCenter(null)}
         distanceKm={detailCenter ? kmById.get(detailCenter.id) ?? null : null}
-        urgentSupplies={detailCenter ? urgentSuppliesByCenter[detailCenter.id] : undefined}
       />
     </div>
   );

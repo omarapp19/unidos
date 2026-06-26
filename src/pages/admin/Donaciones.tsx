@@ -1,6 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { Plus, UserRound, CheckCircle2 } from 'lucide-react';
-import { categories, currentProfile } from '@/lib/mock-data';
+import { useAuth } from '@/lib/auth';
+import { useQuery } from '@/lib/hooks/useQuery';
+import { useMutation } from '@/lib/hooks/useMutation';
+import { getCategories } from '@/lib/api/categories';
+import { createDonation } from '@/lib/api/donations';
 import {
   initialRows,
   addRow,
@@ -8,11 +12,10 @@ import {
   removeRow,
   validateDonationForm,
   isFormValid,
-  buildDonationPayload,
+  isRowComplete,
   type DonationFormErrors,
 } from '@/lib/donation-form';
-import { useData } from '@/lib/store';
-import { Button, Card, Input } from '@/components/ui';
+import { Button, Card, Input, QueryBoundary } from '@/components/ui';
 import { DonationFormRow, type DonationRowValue } from '@/components/domain';
 
 /* ===========================================================================
@@ -23,31 +26,41 @@ import { DonationFormRow, type DonationRowValue } from '@/components/domain';
    ========================================================================== */
 
 export function Donaciones() {
-  const { addDonation } = useData();
+  const { profile } = useAuth();
+  const centerId = profile?.center_id ?? '';
+  const categoriesQuery = useQuery(getCategories, []);
+  const categories = categoriesQuery.data ?? [];
+  const save = useMutation(createDonation);
+
   const [donorName, setDonorName] = useState('');
   const [rows, setRows] = useState<DonationRowValue[]>(initialRows);
   const [errors, setErrors] = useState<DonationFormErrors>({ rows: {} });
   const [savedCount, setSavedCount] = useState<number | null>(null);
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    setSavedCount(null);
     const result = validateDonationForm(rows);
     setErrors(result);
     if (!isFormValid(result)) return;
+    if (!centerId) return;
 
-    const payload = buildDonationPayload({
-      centerId: currentProfile.center_id,
-      createdBy: currentProfile.id,
-      donorName,
-      rows,
-    });
-    addDonation(payload);
-    setSavedCount(payload.items.length);
+    const items = rows.filter(isRowComplete).map((r) => ({
+      category_id: r.categoryId,
+      product: r.product.trim(),
+      quantity: Number(r.quantity),
+    }));
 
-    // Reset para la próxima donación.
-    setDonorName('');
-    setRows(initialRows());
-    setErrors({ rows: {} });
+    try {
+      await save.mutate({ centerId, donorName, items });
+      setSavedCount(items.length);
+      // Reset para la próxima donación.
+      setDonorName('');
+      setRows(initialRows());
+      setErrors({ rows: {} });
+    } catch {
+      // El error queda en `save.error`; se muestra bajo el formulario.
+    }
   }
 
   const isAnonymous = donorName.trim() === '';
@@ -73,6 +86,12 @@ export function Donaciones() {
       )}
 
       <Card>
+        <QueryBoundary
+          loading={categoriesQuery.loading}
+          error={categoriesQuery.error}
+          onRetry={categoriesQuery.refetch}
+          loadingLabel="Cargando categorías…"
+        >
         <form onSubmit={handleSubmit} className="flex flex-col gap-6" noValidate>
           {/* Donante */}
           <div>
@@ -134,13 +153,17 @@ export function Donaciones() {
           {errors.form && (
             <p className="font-body text-sm font-semibold text-danger-ink">{errors.form}</p>
           )}
+          {save.error && (
+            <p className="font-body text-sm font-semibold text-danger-ink">{save.error.message}</p>
+          )}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <Button type="submit" variant="primary" size="lg">
+            <Button type="submit" variant="primary" size="lg" loading={save.loading}>
               Registrar donación
             </Button>
           </div>
         </form>
+        </QueryBoundary>
       </Card>
     </div>
   );

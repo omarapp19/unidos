@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, Printer, UserX, UserRound, History as HistoryIcon } from 'lucide-react';
-import { categories, currentCenter, currentProfile } from '@/lib/mock-data';
-import { useData } from '@/lib/store';
+import { useAuth } from '@/lib/auth';
+import { useQuery } from '@/lib/hooks/useQuery';
+import { getCategories } from '@/lib/api/categories';
+import { getCenterDonations } from '@/lib/api/donations';
 import { donationDetails, type DonationDetail } from '@/lib/stats';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/format';
-import { Button, Card, Badge, EmptyState } from '@/components/ui';
+import { Button, Card, Badge, EmptyState, QueryBoundary } from '@/components/ui';
 import { DonationReport } from '@/components/report/DonationReport';
 
 /* ===========================================================================
@@ -69,12 +71,23 @@ function DonationRow({ detail }: { detail: DonationDetail }) {
 }
 
 export function Historial() {
-  const { donations, donationItems } = useData();
-  const centerId = currentProfile.center_id;
+  const { profile, center } = useAuth();
+  const centerId = profile?.center_id ?? '';
+
+  const categoriesQuery = useQuery(getCategories, []);
+  const donationsQuery = useQuery(
+    () => getCenterDonations(centerId),
+    [centerId],
+    centerId !== '',
+  );
+
+  const categories = categoriesQuery.data ?? [];
+  const donations = donationsQuery.data?.donations ?? [];
+  const donationItems = donationsQuery.data?.items ?? [];
 
   const details = useMemo(
     () => donationDetails(donations, donationItems, categories, centerId),
-    [donations, donationItems, centerId],
+    [donations, donationItems, categories, centerId],
   );
 
   const anonymous = details.filter((d) => d.donation.is_anonymous).length;
@@ -101,27 +114,37 @@ export function Historial() {
 
       <div className="print:hidden">
         <Card>
-          {details.length > 0 ? (
-            <ul className="flex flex-col">
-              {details.map((detail) => (
-                <DonationRow key={detail.donation.id} detail={detail} />
-              ))}
-            </ul>
-          ) : (
-            <EmptyState
-              icon={<HistoryIcon className="h-6 w-6" />}
-              title="Sin donaciones todavía"
-              description="Cuando registres donaciones aparecerán aquí en orden cronológico."
-            />
-          )}
+          <QueryBoundary
+            loading={donationsQuery.loading || categoriesQuery.loading}
+            error={donationsQuery.error ?? categoriesQuery.error}
+            onRetry={() => {
+              donationsQuery.refetch();
+              categoriesQuery.refetch();
+            }}
+            loadingLabel="Cargando historial…"
+          >
+            {details.length > 0 ? (
+              <ul className="flex flex-col">
+                {details.map((detail) => (
+                  <DonationRow key={detail.donation.id} detail={detail} />
+                ))}
+              </ul>
+            ) : (
+              <EmptyState
+                icon={<HistoryIcon className="h-6 w-6" />}
+                title="Sin donaciones todavía"
+                description="Cuando registres donaciones aparecerán aquí en orden cronológico."
+              />
+            )}
+          </QueryBoundary>
         </Card>
       </div>
 
       {/* Reporte: oculto en pantalla, visible solo al imprimir. */}
       <div className="hidden print:block">
         <DonationReport
-          centerName={currentCenter.name}
-          organization={currentCenter.organization}
+          centerName={center?.name ?? ''}
+          organization={center?.organization ?? ''}
           generatedAt={new Date()}
           details={details}
           categories={categories}

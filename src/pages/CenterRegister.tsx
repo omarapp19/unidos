@@ -12,12 +12,16 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Button, Card, Input } from '@/components/ui';
+import { useMutation } from '@/lib/hooks/useMutation';
+import { registerCenter } from '@/lib/api/auth';
+import { forwardGeocode, DEFAULT_LATLNG } from '@/lib/geo';
 
 /* ===========================================================================
    Registro de un centro de acopio (PRD Módulo 2 · alta de cuenta).
-   MOCK: valida los campos obligatorios y simula el alta. Cuando entre Supabase,
-   este submit creará el `center` (pendiente de aprobación) + el `profile` admin
-   vía supabase.auth.signUp en su lugar.
+   Geocodifica la dirección (OSM), crea la cuenta (Supabase Auth) y el centro
+   (is_approved=false) + perfil del admin de forma atómica vía RPC
+   `register_center`. Si el proyecto exige confirmar el correo, informa que debe
+   revisar su bandeja antes de continuar.
    ========================================================================== */
 
 type Fields = {
@@ -48,8 +52,12 @@ export function CenterRegister() {
   const navigate = useNavigate();
   const [fields, setFields] = useState<Fields>(EMPTY);
   const [errors, setErrors] = useState<Errors>({});
-  const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  // true cuando el alta requiere confirmar el correo antes de crear el centro.
+  const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const register = useMutation(registerCenter);
+  const loading = register.loading;
 
   function set<K extends keyof Fields>(key: K, value: string) {
     setFields((f) => ({ ...f, [key]: value }));
@@ -70,17 +78,33 @@ export function CenterRegister() {
     return e;
   }
 
-  function handleSubmit(ev: FormEvent) {
+  async function handleSubmit(ev: FormEvent) {
     ev.preventDefault();
+    setFormError(null);
     const e = validate();
     setErrors(e);
     if (Object.keys(e).length > 0) return;
-    setLoading(true);
-    // Simula el alta; en real → crea center (is_approved=false) + supabase signUp.
-    setTimeout(() => {
-      setLoading(false);
+
+    try {
+      // Geocodifica la dirección para ubicar el centro en el mapa. Si falla,
+      // usa un respaldo (un coordinador puede ajustar la posición al aprobar).
+      const coords = (await forwardGeocode(fields.address)) ?? DEFAULT_LATLNG;
+      const result = await register.mutate({
+        email: fields.email,
+        password: fields.password,
+        name: fields.name,
+        organization: fields.organization,
+        address: fields.address,
+        schedule: fields.schedule,
+        phone: fields.phone,
+        lat: coords.lat,
+        lng: coords.lng,
+      });
+      setNeedsEmailConfirm(!result.hasSession);
       setDone(true);
-    }, 700);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'No pudimos crear la cuenta.');
+    }
   }
 
   return (
@@ -107,8 +131,9 @@ export function CenterRegister() {
               </h1>
               <p className="mt-2 max-w-sm font-body text-sm text-body">
                 Recibimos el registro de <strong className="text-ink">{fields.name}</strong>.
-                Una organización autorizante revisará los datos y, al aprobarlos, tu centro
-                aparecerá en el mapa público.
+                {needsEmailConfirm
+                  ? ' Revisa tu correo para confirmar la cuenta; luego inicia sesión para completar el alta de tu centro.'
+                  : ' Una organización autorizante revisará los datos y, al aprobarlos, tu centro aparecerá en el mapa público.'}
               </p>
               <div className="mt-6 flex w-full flex-col gap-2 sm:flex-row sm:justify-center">
                 <Button variant="primary" size="lg" onClick={() => navigate('/admin/login')}>
@@ -208,6 +233,10 @@ export function CenterRegister() {
                   onChange={(e) => set('confirm', e.target.value)}
                   error={errors.confirm}
                 />
+
+                {formError && (
+                  <p className="font-body text-sm font-semibold text-danger-ink">{formError}</p>
+                )}
 
                 <Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>
                   Crear cuenta del centro

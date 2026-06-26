@@ -1,23 +1,24 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MapPin, Mail, Lock, ArrowLeft } from 'lucide-react';
-import { currentProfile, currentCenter } from '@/lib/mock-data';
+import { useAuth } from '@/lib/auth';
 import { Button, Card, Input } from '@/components/ui';
 
 /* ===========================================================================
-   Login del administrador (PRD Módulo 2). MOCK: cualquier credencial válida
-   (email + contraseña no vacíos) "inicia sesión" y entra al panel. Cuando entre
-   Supabase Auth, este submit llamará a signInWithPassword en su lugar.
+   Login del administrador (PRD Módulo 2). Autentica con Supabase Auth vía
+   useAuth().signIn; al éxito entra al panel. El AuthProvider carga el perfil y
+   el centro del usuario a partir de la sesión.
    ========================================================================== */
 
 export function AdminLogin() {
   const navigate = useNavigate();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     if (!email.trim() || !password.trim()) {
@@ -25,11 +26,14 @@ export function AdminLogin() {
       return;
     }
     setLoading(true);
-    // Simula la latencia de auth; en real → supabase.auth.signInWithPassword.
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await signIn(email, password);
       navigate('/admin/dashboard');
-    }, 600);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No pudimos iniciar sesión.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -87,11 +91,6 @@ export function AdminLogin() {
             </Button>
           </div>
 
-          <p className="mt-5 rounded-lg bg-surface-2 px-4 py-3 font-body text-xs text-muted">
-            Demo: usa cualquier correo y contraseña. Entrarás como{' '}
-            <strong className="text-body">{currentProfile.full_name}</strong> ·{' '}
-            {currentCenter.name}.
-          </p>
         </Card>
       </main>
     </div>
