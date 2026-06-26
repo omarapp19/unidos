@@ -106,35 +106,75 @@ export interface AddressSuggestion {
 }
 
 /**
+ * Limpia la dirección de términos y conectores de referencia informales
+ * (ej: "frente a", "al lado de") que impiden la geocodificación de Nominatim.
+ */
+export function cleanAddressQuery(query: string): string {
+  const referencePhrases = /\b(frente\s+a[l]?|al\s+lado\s+de[l]?|cerca\s+de[l]?|cercano\s+a|detr[aá]s\s+de[l]?|diagonal\s+a[l]?|esquina\s+(con|de)?|a\s+\d+\s+cuadra(s)?\s+de[l]?)\s+[^,]+/gi;
+  let cleaned = query.replace(referencePhrases, '');
+  
+  // Limpieza de comas dobles, espacios adicionales y signos sobrantes
+  cleaned = cleaned
+    .replace(/,\s*,/g, ',')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^[,;.\-\s]+|[,;.\-\s]+$/g, '');
+      
+  return cleaned;
+}
+
+/**
  * Búsqueda de direcciones con Nominatim (OSM). Devuelve hasta 5 sugerencias
  * para el autocomplete del formulario de registro.
  * Sin clave de API. Respeta la política de uso: 1 req/seg (el caller debe
  * debounce).
+ * Soporta proximity biasing usando una viewbox de ~15km si se pasan coordenadas.
  */
 export async function searchAddresses(
   query: string,
+  proximity?: LatLng | null,
   signal?: AbortSignal,
 ): Promise<AddressSuggestion[]> {
-  const q = query.trim();
+  const rawQ = query.trim();
+  if (rawQ.length < 3) return [];
+
+  const q = cleanAddressQuery(rawQ);
   if (q.length < 3) return [];
-  try {
-    const url =
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5` +
-      `&accept-language=es&countrycodes=ve&q=${encodeURIComponent(q)}`;
+
+  const fetchFromNominatim = async (searchQuery: string) => {
+    let url =
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8` +
+      `&accept-language=es&countrycodes=ve`;
+
+    if (proximity) {
+      // Caja delimitadora de ~15km x 15km alrededor del punto
+      const d = 0.15;
+      const left = proximity.lng - d;
+      const top = proximity.lat + d;
+      const right = proximity.lng + d;
+      const bottom = proximity.lat - d;
+      url += `&viewbox=${left},${top},${right},${bottom}&bounded=0`;
+    }
+
+    url += `&q=${encodeURIComponent(searchQuery)}`;
+
     const res = await fetch(url, {
       signal,
       headers: {
         Accept: 'application/json',
       },
     });
+
     if (!res.ok) {
       throw new Error(`Error de red (HTTP ${res.status})`);
     }
+
     const data = (await res.json()) as Array<{
       display_name: string;
       lat: string;
       lon: string;
     }>;
+
     return data
       .map((d) => ({
         displayName: d.display_name,
@@ -142,9 +182,21 @@ export async function searchAddresses(
         lng: Number(d.lon),
       }))
       .filter((d) => Number.isFinite(d.lat) && Number.isFinite(d.lng));
+  };
+
+  try {
+    // Intentar primero con el query limpio
+    let results = await fetchFromNominatim(q);
+
+    // Si no hay resultados y el query limpio es distinto al original, reintentar con el original
+    if (results.length === 0 && q !== rawQ) {
+      results = await fetchFromNominatim(rawQ);
+    }
+
+    // Limitar a los mejores 5 resultados en total
+    return results.slice(0, 5);
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      // Si la petición fue abortada por una nueva pulsación de tecla, no es un error real para mostrar.
       throw error;
     }
     console.error('[Nominatim API Error] Failed to fetch suggestions:', error);
@@ -166,23 +218,38 @@ export async function forwardGeocode(
   address: string,
   signal?: AbortSignal,
 ): Promise<LatLng | null> {
-  const q = address.trim();
+  const rawQ = address.trim();
+  if (!rawQ) return null;
+
+  const q = cleanAddressQuery(rawQ);
   if (!q) return null;
-  try {
-    const url =
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1` +
-      `&accept-language=es&countrycodes=ve&q=${encodeURIComponent(q)}`;
-    const res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
-    if (!res.ok) return null;
-    const data = (await res.json()) as Array<{ lat: string; lon: string }>;
-    const hit = data[0];
-    if (!hit) return null;
-    const lat = Number(hit.lat);
-    const lng = Number(hit.lon);
-    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
-  } catch {
-    return null;
+
+  const fetchGeocode = async (searchQuery: string): Promise<LatLng | null> => {
+    try {
+      const url =
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1` +
+        `&accept-language=es&countrycodes=ve&q=${encodeURIComponent(searchQuery)}`;
+      const res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
+      if (!res.ok) return null;
+      const data = (await res.json()) as Array<{ lat: string; lon: string }>;
+      const hit = data[0];
+      if (!hit) return null;
+      const lat = Number(hit.lat);
+      const lng = Number(hit.lon);
+      return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const hit = await fetchGeocode(q);
+  if (hit) return hit;
+
+  if (q !== rawQ) {
+    return fetchGeocode(rawQ);
   }
+
+  return null;
 }
 
 /**

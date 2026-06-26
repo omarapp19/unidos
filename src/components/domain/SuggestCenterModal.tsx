@@ -235,6 +235,7 @@ export function SuggestCenterModal({ open, onClose }: SuggestCenterModalProps) {
             placeholder="Escribe para buscar calle, sector o ciudad..."
             value={form.address}
             onChange={(e) => set('address', e.target.value)}
+            proximity={form.lat && form.lng ? { lat: parseFloat(form.lat), lng: parseFloat(form.lng) } : null}
             onSelect={(address, lat, lng) => {
               setForm((f) => ({
                 ...f,

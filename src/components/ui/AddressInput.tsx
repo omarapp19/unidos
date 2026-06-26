@@ -19,6 +19,8 @@ export interface AddressInputProps extends Omit<InputHTMLAttributes<HTMLInputEle
   hint?: string;
   hideLabel?: boolean;
   leadingIcon?: ReactNode;
+  /** Coordenadas para sesgar/priorizar los resultados. */
+  proximity?: { lat: number; lng: number } | null;
   /** Callback al seleccionar una sugerencia: dirección legible + coordenadas. */
   onSelect?: (address: string, lat: number, lng: number) => void;
 }
@@ -39,6 +41,7 @@ export function AddressInput({
   hint,
   hideLabel = false,
   leadingIcon,
+  proximity,
   onSelect,
   id,
   className,
@@ -59,6 +62,7 @@ export function AddressInput({
   const [activeIndex, setActiveIndex] = useState(-1);
   const [loading, setLoading] = useState(false);
   const [errorState, setErrorState] = useState<string | null>(null);
+  const [gpsPos, setGpsPos] = useState<{ lat: number; lng: number } | null>(null);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,6 +70,37 @@ export function AddressInput({
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const abortRef = useRef<AbortController>();
   const justSelectedRef = useRef(false);
+
+  // Obtener GPS del navegador como fallback si no se proporciona proximity
+  useEffect(() => {
+    if (proximity) {
+      setGpsPos(proximity);
+      return;
+    }
+
+    try {
+      if (typeof navigator !== 'undefined' && navigator.permissions && navigator.geolocation) {
+        navigator.permissions
+          .query({ name: 'geolocation' as PermissionName })
+          .then((result) => {
+            if (result.state === 'granted') {
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  setGpsPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                },
+                undefined,
+                { enableHighAccuracy: false, timeout: 3000, maximumAge: 600000 }
+              );
+            }
+          })
+          .catch(() => {
+            // Ignorar errores
+          });
+      }
+    } catch (e) {
+      // Ignorar errores en navegadores que no soporten Permissions API
+    }
+  }, [proximity]);
 
   // Debounce + búsqueda al escribir.
   useEffect(() => {
@@ -91,7 +126,7 @@ export function AddressInput({
       setLoading(true);
       setErrorState(null);
       try {
-        const results = await searchAddresses(q, ctrl.signal);
+        const results = await searchAddresses(q, gpsPos, ctrl.signal);
         if (!ctrl.signal.aborted) {
           setSuggestions(results);
           setOpen(results.length > 0);
@@ -117,7 +152,7 @@ export function AddressInput({
       if (debounceRef.current) clearTimeout(debounceRef.current);
       abortRef.current?.abort();
     };
-  }, [value]);
+  }, [value, gpsPos]);
 
   function selectSuggestion(s: AddressSuggestion) {
     justSelectedRef.current = true;
@@ -253,8 +288,9 @@ export function AddressInput({
                 ⚠️ {errorState}
               </li>
             ) : suggestions.length === 0 ? (
-              <li className="px-3 py-2.5 font-body text-sm text-muted">
-                Sin resultados
+              <li className="px-3 py-2.5 font-body text-xs text-muted leading-relaxed">
+                <span className="font-semibold block text-ink mb-1">Sin resultados exactos</span>
+                Intenta buscando por calle/avenida principal, sector o municipio (ej: "Avenida Principal de Las Mercedes" o "Chacao"), y luego ajusta el pin directamente en el mapa.
               </li>
             ) : (
               suggestions.map((s, i) => {
