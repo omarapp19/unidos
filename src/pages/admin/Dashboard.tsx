@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Boxes, Tag, Layers, PackagePlus } from 'lucide-react';
+import { Users, Boxes, Tag, Layers, PackagePlus, Trash2, AlertCircle, PlusCircle } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useQuery } from '@/lib/hooks/useQuery';
 import { getCategories } from '@/lib/api/categories';
@@ -14,6 +14,7 @@ import {
 import { Button, Card, QueryBoundary } from '@/components/ui';
 import { CenterStatusBadge } from '@/components/ui/Badge';
 import { StatWidget, Donut } from '@/components/domain';
+import { getNeededSupplies, addNeededSupply, deleteNeededSupply, type NeededSupply } from '@/lib/api/supplies';
 
 /** Colores de marca para las mini barras del mosaico. */
 const BAR_FILL = ['bg-azul', 'bg-amarillo', 'bg-rojo', 'bg-success'] as const;
@@ -62,6 +63,8 @@ export function Dashboard() {
     () => totalQuantityForCenter(donations, donationItems, centerId),
     [donations, donationItems, centerId],
   );
+
+  const isSuperadmin = profile?.role === 'superadmin';
 
   // Identificados vs anónimos: acumulado de todas las donaciones del centro.
   const { identified, anonymous, pctIdentified } = useMemo(() => {
@@ -173,7 +176,132 @@ export function Dashboard() {
           )}
         </Card>
       </div>
+
+      {isSuperadmin && (
+        <SuperadminSuppliesManager />
+      )}
       </QueryBoundary>
     </div>
+  );
+}
+
+function SuperadminSuppliesManager() {
+  const [supplies, setSupplies] = useState<NeededSupply[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [newItem, setNewItem] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  async function loadSupplies() {
+    setLoading(true);
+    try {
+      const data = await getNeededSupplies();
+      setSupplies(data);
+      setError(null);
+    } catch (err: any) {
+      setError(err?.message ?? 'Error al cargar los insumos');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadSupplies();
+  }, []);
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    const name = newItem.trim();
+    if (!name) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const added = await addNeededSupply(name);
+      setSupplies((prev) => [...prev, added]);
+      setNewItem('');
+    } catch (err: any) {
+      setError(err?.message ?? 'Error al guardar el insumo.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('¿Estás seguro de eliminar este insumo?')) return;
+    setError(null);
+    try {
+      await deleteNeededSupply(id);
+      setSupplies((prev) => prev.filter((item) => item.id !== id));
+    } catch (err: any) {
+      setError(err?.message ?? 'Error al eliminar el insumo.');
+    }
+  }
+
+  return (
+    <Card className="flex flex-col gap-4 border-warning/40 shadow-sm bg-surface">
+      <div className="flex items-center justify-between border-b border-line-soft pb-3">
+        <div>
+          <h2 className="font-display text-h3 font-black tracking-snug text-ink flex items-center gap-2">
+            <PlusCircle className="h-5 w-5 text-warning-ink" />
+            Administración de Insumos Críticos
+          </h2>
+          <p className="text-xs text-muted font-body mt-0.5">
+            Solo visible para usuarios Superadmin. Modifica el banner de insumos más necesitados de la landing pública.
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-2 rounded-lg bg-danger-bg p-3 text-sm text-danger-ink">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <p className="font-body text-xs">{error}</p>
+        </div>
+      )}
+
+      <form onSubmit={handleAdd} className="flex gap-2">
+        <input
+          type="text"
+          placeholder="Ej: Insumos médicos, Ampollas, Tabletas..."
+          value={newItem}
+          onChange={(e) => setNewItem(e.target.value)}
+          className="flex-1 rounded-pill border border-line bg-surface px-4 py-2 text-xs font-body text-ink placeholder:text-muted focus:border-azul focus:outline-none"
+          disabled={submitting}
+        />
+        <Button
+          type="submit"
+          variant="primary"
+          size="sm"
+          loading={submitting}
+          className="whitespace-nowrap"
+        >
+          Agregar
+        </Button>
+      </form>
+
+      {loading ? (
+        <p className="text-xs text-muted font-body">Cargando insumos...</p>
+      ) : supplies.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {supplies.map((item) => (
+            <span
+              key={item.id}
+              className="inline-flex items-center gap-1.5 rounded-pill bg-warning-bg px-3 py-1 font-body text-2xs font-bold text-warning-ink"
+            >
+              {item.name}
+              <button
+                type="button"
+                onClick={() => handleDelete(item.id)}
+                className="hover:text-danger hover:scale-110 transition shrink-0"
+                aria-label={`Eliminar ${item.name}`}
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted font-body">No hay insumos críticos definidos.</p>
+      )}
+    </Card>
   );
 }
