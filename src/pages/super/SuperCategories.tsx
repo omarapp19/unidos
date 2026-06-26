@@ -109,7 +109,7 @@ export function SuperCategories() {
                 <div className="flex gap-2">
                   <Button size="sm" variant="ghost" onClick={() => openEdit(c)}
                     leftIcon={<Pencil className="h-4 w-4" />}>Editar</Button>
-                  <Button size="sm" variant="ghost" onClick={() => onDelete(c)}
+                  <Button size="sm" variant="ghost" onClick={() => onDelete(c)} disabled={remove.loading}
                     leftIcon={<Trash2 className="h-4 w-4" />}>Eliminar</Button>
                 </div>
               </Card>
