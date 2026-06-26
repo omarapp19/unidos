@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2 } from 'lucide-react';
+import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, Stethoscope, TestTube, Pill, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
-import { nearest, sortByDistance, formatDistance, reverseGeocode, type LatLng } from '@/lib/geo';
+import { nearest, sortByDistance, reverseGeocode, type LatLng, DEFAULT_LATLNG } from '@/lib/geo';
 import { categoryTotals } from '@/lib/stats';
 import { useQuery } from '@/lib/hooks/useQuery';
 import { getApprovedCenters } from '@/lib/api/centers';
 import { getCategories } from '@/lib/api/categories';
 import { getNetworkDonationItems } from '@/lib/api/donations';
+import { getNeededSupplies } from '@/lib/api/supplies';
 import type { Center } from '@/types';
 import { Button, Card, Badge, Input, EmptyState, Spinner, QueryBoundary } from '@/components/ui';
 import {
@@ -28,7 +29,7 @@ import { CenterMap } from '@/components/map/CenterMap';
 
 const BAR_COLORS: CategoryBarColor[] = ['azul', 'amarillo', 'rojo', 'success'];
 
-/** Cuántos centros (además del destacado) se cargan por tanda al scrollear. */
+/** Cuántos centros se cargan por tanda al scrollear. */
 const PAGE_SIZE = 6;
 
 /** Zona mostrada en el header antes de detectar la ubicación del visitante. */
@@ -36,15 +37,19 @@ const DEFAULT_LOCATION = 'Chacao, Caracas';
 
 type GeoState = 'idle' | 'loading' | 'granted' | 'denied';
 
-/** Barra tricolor de marca (amarillo · azul · rojo). */
-function Tricolor({ className = '' }: { className?: string }) {
-  return (
-    <div className={`flex h-1.5 w-full overflow-hidden rounded-full ${className}`}>
-      <span className="flex-1 bg-amarillo" />
-      <span className="flex-1 bg-azul" />
-      <span className="flex-1 bg-rojo" />
-    </div>
-  );
+function getSupplyIcon(name: string, sizeClass = 'h-4 w-4') {
+  const n = name.toLowerCase();
+  const cls = `${sizeClass} shrink-0`;
+  if (n.includes('med') || n.includes('salud') || n.includes('sanit')) {
+    return <Stethoscope className={`${cls} text-rojo`} />;
+  }
+  if (n.includes('ampoll') || n.includes('inyect')) {
+    return <TestTube className={`${cls} text-azul`} />;
+  }
+  if (n.includes('tablet') || n.includes('pastill') || n.includes('pild') || n.includes('medicament')) {
+    return <Pill className={`${cls} text-amarillo`} />;
+  }
+  return <HeartPulse className={`${cls} text-success`} />;
 }
 
 export function PublicHome() {
@@ -54,20 +59,50 @@ export function PublicHome() {
   const centersQuery = useQuery(getApprovedCenters, []);
   const categoriesQuery = useQuery(getCategories, []);
   const itemsQuery = useQuery(getNetworkDonationItems, []);
+  const suppliesQuery = useQuery(getNeededSupplies, []);
   const approvedCenters = centersQuery.data ?? [];
   const categories = categoriesQuery.data ?? [];
   const donationItems = itemsQuery.data ?? [];
+  const neededSupplies = suppliesQuery.data ?? [];
   const [userPos, setUserPos] = useState<LatLng | null>(null);
   const [geoState, setGeoState] = useState<GeoState>('idle');
   const [geoError, setGeoError] = useState<string | null>(null);
   // Zona detectada (reverse-geocoding) que se muestra en el header. Por defecto, la
   // ciudad base del proyecto hasta que el usuario comparta su ubicación.
   const [locationLabel, setLocationLabel] = useState<string>(DEFAULT_LOCATION);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
   const [flyTo, setFlyTo] = useState<LatLng | null>(null);
   const [query, setQuery] = useState('');
   // Centro abierto en la ficha ampliada (contacto + redes). `null` = modal cerrado.
   const [detailCenter, setDetailCenter] = useState<Center | null>(null);
+
+  // Control para inicializar el centro más cercano una sola vez cuando
+  // coincidan la disponibilidad de la ubicación y de los centros cargados.
+  const hasInitializedNearestRef = useRef(false);
+
+  // Sincronizar el centro más cercano una vez que se tiene la ubicación y los centros cargados.
+  useEffect(() => {
+    if (userPos && approvedCenters.length > 0 && !hasInitializedNearestRef.current) {
+      hasInitializedNearestRef.current = true;
+      const near = nearest(userPos, approvedCenters);
+      if (near) {
+        setMapSelectedId(near.item.id);
+        setFlyTo({ lat: near.item.lat, lng: near.item.lng });
+        if (locationLabel === DEFAULT_LOCATION) {
+          reverseGeocode(userPos).then((label) => {
+            if (label) setLocationLabel(label);
+            else setLocationLabel(near.item.address.split(',').slice(-2).join(',').trim());
+          });
+        }
+      }
+    }
+  }, [approvedCenters, userPos, locationLabel]);
+
+  // Pedir ubicación automáticamente al cargar la web
+  useEffect(() => {
+    locateMe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Centros ordenados por cercanía (si hay ubicación) y filtrados por búsqueda.
   const ranked = useMemo(() => {
@@ -89,20 +124,11 @@ export function PublicHome() {
     return m;
   }, [ranked]);
 
-  const nearestId = userPos ? nearest(userPos, approvedCenters)?.item.id ?? null : null;
-  const featuredId = selectedId ?? nearestId ?? ranked[0]?.item.id ?? null;
-  const featured = ranked.find((r) => r.item.id === featuredId) ?? ranked[0];
-  const isNearest = featured?.item.id === nearestId;
-
-  // Lazy loading: el resto de centros se carga por tandas al llegar al final.
-  const rest = useMemo(
-    () => ranked.filter((r) => r.item.id !== featuredId),
-    [ranked, featuredId],
-  );
+  // Lazy loading: centros se cargan por tandas al llegar al final.
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const visibleRest = rest.slice(0, visibleCount);
-  const hasMore = visibleCount < rest.length;
+  const visibleCenters = ranked.slice(0, visibleCount);
+  const hasMore = visibleCount < ranked.length;
 
   // Reinicia la tanda cuando cambia el filtro/orden (búsqueda o ubicación).
   useEffect(() => {
@@ -122,7 +148,7 @@ export function PublicHome() {
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [hasMore, visibleRest.length]);
+  }, [hasMore, visibleCenters.length]);
 
   // Gráfico de la red: solo ítems (sin tocar donaciones → nombres privados).
   const publicTotals = useMemo(
@@ -130,17 +156,52 @@ export function PublicHome() {
     [donationItems, categories],
   );
 
+  async function fallbackToIpLocation() {
+    try {
+      const res = await fetch('https://freeipapi.com/api/json');
+      if (!res.ok) throw new Error('API response not OK');
+      const data = await res.json();
+      if (typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+        const p = { lat: data.latitude, lng: data.longitude };
+        setUserPos(p);
+        
+        const near = nearest(p, approvedCenters);
+        if (near) {
+          setMapSelectedId(near.item.id);
+          setFlyTo({ lat: near.item.lat, lng: near.item.lng });
+        }
+        
+        if (data.cityName) {
+          const label = data.regionName ? `${data.cityName}, ${data.regionName}` : data.cityName;
+          setLocationLabel(label);
+        } else {
+          reverseGeocode(p).then((label) => {
+            if (label) setLocationLabel(label);
+            else if (near) setLocationLabel(near.item.address.split(',').slice(-2).join(',').trim());
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Error fallback to IP geolocation:', e);
+      setFlyTo(DEFAULT_LATLNG);
+    }
+  }
+
   function locateMe() {
     if (!navigator.geolocation) {
       setGeoError('Tu navegador no soporta geolocalización.');
-      return setGeoState('denied');
+      setGeoState('denied');
+      fallbackToIpLocation();
+      return;
     }
     // La API de geolocalización solo funciona en contexto seguro (https o localhost).
     if (!window.isSecureContext) {
       setGeoError(
         'La ubicación requiere una conexión segura (https). Abre el sitio con https o desde localhost.',
       );
-      return setGeoState('denied');
+      setGeoState('denied');
+      fallbackToIpLocation();
+      return;
     }
     setGeoState('loading');
     setGeoError(null);
@@ -151,7 +212,7 @@ export function PublicHome() {
         setGeoState('granted');
         const near = nearest(p, approvedCenters);
         if (near) {
-          setSelectedId(near.item.id);
+          setMapSelectedId(near.item.id);
           setFlyTo({ lat: near.item.lat, lng: near.item.lng });
         }
         // Header dinámico: resuelve la zona detectada (OSM); si falla, mantiene la zona
@@ -172,13 +233,14 @@ export function PublicHome() {
                 : 'No pudimos obtener tu ubicación.';
         setGeoError(msg);
         setGeoState('denied');
+        fallbackToIpLocation();
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
   }
 
   function selectCenter(center: Center) {
-    setSelectedId(center.id);
+    setMapSelectedId(center.id);
     setFlyTo({ lat: center.lat, lng: center.lng });
   }
 
@@ -187,19 +249,19 @@ export function PublicHome() {
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-line-soft bg-surface/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <Link to="/" className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-rojo text-white">
+          <Link to="/" className="flex items-center gap-2 min-w-0">
+            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-rojo text-white shrink-0">
               <MapPin className="h-5 w-5" aria-hidden />
             </span>
-            <span className="flex flex-col leading-none">
+            <span className="flex flex-col leading-none min-w-0">
               <span className="font-display text-h3 font-black tracking-snug text-ink">Unidos</span>
-              <span className="flex items-center gap-0.5 font-body text-2xs text-muted">
+              <span className="flex items-center gap-0.5 font-body text-2xs text-muted min-w-0">
                 <MapPin className="h-3 w-3 shrink-0 text-rojo" aria-hidden />
                 <span className="truncate">{locationLabel}</span>
               </span>
             </span>
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Button
               variant="ghost"
               size="sm"
@@ -221,44 +283,94 @@ export function PublicHome() {
         </div>
       </header>
 
-      {/* Título + buscador */}
-      <section className="mx-auto w-full max-w-6xl px-4 pt-6">
-        <p className="font-body text-2xs font-bold uppercase tracking-eyebrow text-azul">
-          Cerca, entre todos
-        </p>
-        <h1 className="mt-1 font-display text-h1 font-black tracking-tightest text-ink">
-          Centros cerca de ti
-        </h1>
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-          <Input
-            label="Buscar centro o zona"
-            hideLabel
-            placeholder="Buscar centro o zona…"
-            leadingIcon={<Search className="h-4 w-4" aria-hidden />}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="sm:flex-1"
-          />
-          <Button
-            variant="secondary"
-            size="lg"
-            onClick={locateMe}
-            loading={geoState === 'loading'}
-            leftIcon={geoState !== 'loading' ? <Navigation className="h-4 w-4" /> : undefined}
-          >
-            {userPos ? 'Actualizar ubicación' : 'Mi ubicación'}
-          </Button>
-        </div>
-        {geoState === 'denied' && (
-          <p className="mt-2 font-body text-xs text-danger-ink">
-            {geoError ?? 'No pudimos obtener tu ubicación.'} Puedes explorar la lista y el mapa
-            libremente.
+      {/* Título + buscador + Insumos */}
+      <section className="mx-auto w-full max-w-6xl px-4 pt-6 grid gap-6 lg:grid-cols-2 items-start">
+        {/* Lado izquierdo: Título + buscador */}
+        <div className="w-full">
+          <p className="font-body text-2xs font-bold uppercase tracking-eyebrow text-azul">
+            Cerca, entre todos
           </p>
-        )}
+          <h1 className="mt-1 font-display text-h1 font-black tracking-tightest text-ink">
+            Centros cerca de ti
+          </h1>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <Input
+              label="Buscar centro o zona"
+              hideLabel
+              placeholder="Buscar centro o zona…"
+              leadingIcon={<Search className="h-4 w-4" aria-hidden />}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="sm:flex-1"
+            />
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={locateMe}
+              loading={geoState === 'loading'}
+              leftIcon={geoState !== 'loading' ? <Navigation className="h-4 w-4" /> : undefined}
+            >
+              {userPos ? 'Actualizar ubicación' : 'Mi ubicación'}
+            </Button>
+          </div>
+          {geoState === 'denied' && (
+            <p className="mt-2 font-body text-xs text-danger-ink">
+              {geoError ?? 'No pudimos obtener tu ubicación.'} Puedes explorar la lista y el mapa
+              libremente.
+            </p>
+          )}
+        </div>
+
+        {/* Lado derecho: Insumos críticos más necesitados (arriba del mapa en desktop) */}
+        <div className="w-full flex flex-col items-center lg:items-center">
+          {neededSupplies.length > 0 && (
+            <div className="flex flex-col gap-2.5 w-full items-center">
+              <div className="flex items-center justify-between w-full max-w-[312px]">
+                <div className="flex items-center gap-1.5">
+                  <Activity className="h-4 w-4 text-rojo animate-pulse" />
+                  <span className="font-display text-[10px] font-black uppercase tracking-wider text-ink">
+                    Insumos Críticos Requeridos
+                  </span>
+                </div>
+                
+                {/* Indicador En Vivo */}
+                <span className="inline-flex items-center gap-1 rounded-pill bg-danger-bg px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-danger-ink border border-danger-bg/50 select-none">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-danger"></span>
+                  </span>
+                  En Vivo
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-3 justify-center">
+                {neededSupplies.map((item) => (
+                  <div
+                    key={item.id}
+                    className="relative flex flex-col items-center justify-center gap-1.5 w-24 h-24 rounded-2xl border border-line-soft bg-surface p-3 hover:scale-[1.04] hover:border-azul/45 hover:shadow-xs transition-all duration-200 select-none"
+                  >
+                    {/* Indicador verde de pulso en la esquina superior derecha */}
+                    <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-success animate-pulse" title="Requerido urgentemente" />
+                    
+                    {/* Icono más grande con fondo circular */}
+                    <div className="flex items-center justify-center p-2 rounded-full bg-surface-2 shrink-0">
+                      {getSupplyIcon(item.name, 'h-5 w-5')}
+                    </div>
+                    
+                    {/* Texto del insumo centrado abajo */}
+                    <span className="font-body text-[10px] font-bold leading-tight text-ink text-center truncate w-full px-0.5" title={item.name}>
+                      {item.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Lista (dominante) + mapa (apoyo) */}
-      <section className="mx-auto mt-5 grid w-full max-w-6xl flex-1 gap-4 px-4 lg:grid-cols-[1.25fr_1fr]">
+      <section className="mx-auto mt-5 flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 lg:grid lg:grid-cols-[1.25fr_1fr]">
         {/* Lista */}
         <div className="scrollbar-thin order-2 flex flex-col gap-3 lg:order-1 lg:sticky lg:top-20 lg:max-h-[70vh] lg:overflow-y-auto lg:pr-1">
           <QueryBoundary
@@ -267,31 +379,10 @@ export function PublicHome() {
             onRetry={centersQuery.refetch}
             loadingLabel="Cargando centros…"
           >
-          {featured ? (
+          {visibleCenters.length > 0 ? (
             <>
-              {/* Más cercano / seleccionado: resaltado con barra tricolor */}
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="font-body text-2xs font-bold uppercase tracking-eyebrow text-subtle">
-                    {isNearest ? 'Más cercano' : 'Seleccionado'}
-                    {featured.km != null && ` · ${formatDistance(featured.km)}`}
-                  </p>
-                </div>
-                <div className="overflow-hidden rounded-xl">
-                  <Tricolor className="rounded-none" />
-                  <CenterCard
-                    center={featured.item}
-                    distanceKm={featured.km}
-                    onDetails={() => setDetailCenter(featured.item)}
-                    highlighted
-                    className="rounded-t-none"
-                  />
-                </div>
-              </div>
-
-              {/* Resto de centros (lazy loading por tandas) */}
               <div className="flex flex-col gap-2">
-                {visibleRest.map(({ item, km }) => (
+                {visibleCenters.map(({ item, km }) => (
                   <CenterCard
                     key={item.id}
                     center={item}
@@ -303,7 +394,6 @@ export function PublicHome() {
                 ))}
               </div>
 
-              {/* Centinela: al entrar en vista carga la siguiente tanda. */}
               {hasMore && (
                 <div ref={sentinelRef} className="flex justify-center py-3">
                   <Spinner size="sm" label="Cargando más centros…" />
@@ -323,12 +413,12 @@ export function PublicHome() {
         </div>
 
         {/* Mapa de apoyo */}
-        <div className="order-1 lg:order-2">
+        <div className="order-1 lg:order-2 sticky top-20 z-10 lg:static lg:z-0">
           <div className="h-52 overflow-hidden rounded-xl border border-line-soft shadow-card lg:sticky lg:top-20 lg:h-[70vh]">
             <CenterMap
               centers={approvedCenters}
               userPosition={userPos}
-              selectedId={featuredId}
+              selectedId={mapSelectedId}
               flyTo={flyTo}
               onSelect={selectCenter}
             />
@@ -337,7 +427,7 @@ export function PublicHome() {
       </section>
 
       {/* Gráfico general de la red (§1.C) */}
-      <section className="mx-auto mt-10 w-full max-w-6xl px-4 pb-16">
+      <section className="mx-auto mt-10 w-full max-w-6xl px-4 pb-6">
         <Card>
           <div className="mb-4 flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-azul" aria-hidden />
@@ -373,6 +463,413 @@ export function PublicHome() {
               <EmptyState title="Aún no hay datos" description="Todavía no se han registrado donaciones." />
             )}
           </QueryBoundary>
+        </Card>
+      </section>
+
+      {/* Guía Informativa de Insumos Permitidos */}
+      <section className="mx-auto w-full max-w-6xl px-4 pb-16">
+        <Card className="p-6 border border-line-soft shadow-card">
+          <div className="mb-6 border-b border-line-soft pb-4">
+            <h2 className="font-display text-h3 font-black tracking-snug text-ink flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-azul" />
+              Guía de Insumos: ¿Qué se puede donar?
+            </h2>
+            <p className="font-body text-sm text-body mt-1">
+              Información oficial sobre los suministros necesarios para los afectados y las condiciones requeridas para cada tipo de donación.
+            </p>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {/* 1. Alimentos */}
+            <div className="group relative flex flex-col rounded-xl border border-line-soft bg-surface p-5 hover:scale-[1.02] hover:-translate-y-1 hover:border-azul/50 hover:shadow-[0_16px_36px_rgba(31,111,214,0.12)] transition-all duration-300">
+              <div className="flex items-center gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-azul/10 text-azul group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shrink-0">
+                  <Apple className="h-6 w-6" />
+                </span>
+                <div>
+                  <h3 className="font-display text-sm font-black tracking-tight text-ink group-hover:text-azul transition-colors">
+                    Alimentos No Perecederos
+                  </h3>
+                  <span className="text-[10px] font-bold text-azul uppercase tracking-wider font-body">Nutrición y Energía</span>
+                </div>
+              </div>
+              
+              <p className="mt-3 font-body text-xs text-muted leading-relaxed">
+                Productos con fecha de vencimiento lejana que no requieran refrigeración.
+              </p>
+              
+              <div className="mt-4 flex-1 flex flex-col gap-3">
+                {/* Aceptado (SÍ) */}
+                <div className="rounded-lg bg-success-bg p-3 border border-success/15 flex flex-col gap-1.5">
+                  <span className="inline-flex items-center gap-1 font-body text-[10px] font-extrabold uppercase tracking-wider text-success-ink select-none">
+                    <CheckCircle className="h-3.5 w-3.5 text-success" />
+                    ¿Qué traer?
+                  </span>
+                  <ul className="font-body text-xs text-body leading-relaxed space-y-1">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Enlatados, arroz, pasta y granos</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Aceite y harina de maíz</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Fórmulas lácteas infantiles</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Rechazado (NO) */}
+                <div className="rounded-lg bg-danger-bg p-3 border border-danger/15 flex flex-col gap-1.5">
+                  <span className="inline-flex items-center gap-1 font-body text-[10px] font-extrabold uppercase tracking-wider text-danger-ink select-none">
+                    <XCircle className="h-3.5 w-3.5 text-danger" />
+                    ¿Qué evitar?
+                  </span>
+                  <ul className="font-body text-xs text-body leading-relaxed space-y-1">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Alimentos preparados o perecederos</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Productos vencidos o en mal estado</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Envases de vidrio dañados</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Salud y Medicinas */}
+            <div className="group relative flex flex-col rounded-xl border border-line-soft bg-surface p-5 hover:scale-[1.02] hover:-translate-y-1 hover:border-rojo/50 hover:shadow-[0_16px_36px_rgba(226,59,46,0.12)] transition-all duration-300">
+              <div className="flex items-center gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-rojo/10 text-rojo group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shrink-0">
+                  <HeartPulse className="h-6 w-6" />
+                </span>
+                <div>
+                  <h3 className="font-display text-sm font-black tracking-tight text-ink group-hover:text-rojo transition-colors">
+                    Medicinas e Insumos
+                  </h3>
+                  <span className="text-[10px] font-bold text-rojo uppercase tracking-wider font-body">Primeros Auxilios</span>
+                </div>
+              </div>
+              
+              <p className="mt-3 font-body text-xs text-muted leading-relaxed">
+                Medicamentos vigentes y material de curación para primeros auxilios.
+              </p>
+              
+              <div className="mt-4 flex-1 flex flex-col gap-3">
+                {/* Aceptado (SÍ) */}
+                <div className="rounded-lg bg-success-bg p-3 border border-success/15 flex flex-col gap-1.5">
+                  <span className="inline-flex items-center gap-1 font-body text-[10px] font-extrabold uppercase tracking-wider text-success-ink select-none">
+                    <CheckCircle className="h-3.5 w-3.5 text-success" />
+                    ¿Qué traer?
+                  </span>
+                  <ul className="font-body text-xs text-body leading-relaxed space-y-1">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Analgésicos y antibióticos</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Gasas, vendas y adhesivos</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Alcohol y soluciones antisépticas</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Jeringas y material de curación</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Rechazado (NO) */}
+                <div className="rounded-lg bg-danger-bg p-3 border border-danger/15 flex flex-col gap-1.5">
+                  <span className="inline-flex items-center gap-1 font-body text-[10px] font-extrabold uppercase tracking-wider text-danger-ink select-none">
+                    <XCircle className="h-3.5 w-3.5 text-danger" />
+                    ¿Qué evitar?
+                  </span>
+                  <ul className="font-body text-xs text-body leading-relaxed space-y-1">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Medicamentos vencidos o abiertos</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Jarabes o suspensiones empezados</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Psicofármacos o de control especial</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Higiene Personal */}
+            <div className="group relative flex flex-col rounded-xl border border-line-soft bg-surface p-5 hover:scale-[1.02] hover:-translate-y-1 hover:border-amarillo/50 hover:shadow-[0_16px_36px_rgba(244,192,33,0.12)] transition-all duration-300">
+              <div className="flex items-center gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-amarillo/10 text-amarillo-ink group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shrink-0">
+                  <Droplet className="h-6 w-6" />
+                </span>
+                <div>
+                  <h3 className="font-display text-sm font-black tracking-tight text-ink group-hover:text-amarillo-ink transition-colors">
+                    Higiene Personal
+                  </h3>
+                  <span className="text-[10px] font-bold text-amarillo-ink uppercase tracking-wider font-body">Cuidado y Aseo</span>
+                </div>
+              </div>
+              
+              <p className="mt-3 font-body text-xs text-muted leading-relaxed">
+                Artículos esenciales para el aseo diario de niños, adultos y familias.
+              </p>
+              
+              <div className="mt-4 flex-1 flex flex-col gap-3">
+                {/* Aceptado (SÍ) */}
+                <div className="rounded-lg bg-success-bg p-3 border border-success/15 flex flex-col gap-1.5">
+                  <span className="inline-flex items-center gap-1 font-body text-[10px] font-extrabold uppercase tracking-wider text-success-ink select-none">
+                    <CheckCircle className="h-3.5 w-3.5 text-success" />
+                    ¿Qué traer?
+                  </span>
+                  <ul className="font-body text-xs text-body leading-relaxed space-y-1">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Jabón de baño y champú</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Crema dental, cepillos y aseo personal</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Pañales (para bebés y adultos)</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Toallas sanitarias y toallitas húmedas</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Rechazado (NO) */}
+                <div className="rounded-lg bg-danger-bg p-3 border border-danger/15 flex flex-col gap-1.5">
+                  <span className="inline-flex items-center gap-1 font-body text-[10px] font-extrabold uppercase tracking-wider text-danger-ink select-none">
+                    <XCircle className="h-3.5 w-3.5 text-danger" />
+                    ¿Qué evitar?
+                  </span>
+                  <ul className="font-body text-xs text-body leading-relaxed space-y-1">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Productos de higiene abiertos o usados</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Envases rotos, sucios o con fugas</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Agua e Hidratación */}
+            <div className="group relative flex flex-col rounded-xl border border-line-soft bg-surface p-5 hover:scale-[1.02] hover:-translate-y-1 hover:border-success/50 hover:shadow-[0_16px_36px_rgba(47,158,91,0.12)] transition-all duration-300">
+              <div className="flex items-center gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-success/10 text-success group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shrink-0">
+                  <GlassWater className="h-6 w-6" />
+                </span>
+                <div>
+                  <h3 className="font-display text-sm font-black tracking-tight text-ink group-hover:text-success transition-colors">
+                    Agua e Hidratación
+                  </h3>
+                  <span className="text-[10px] font-bold text-success-ink uppercase tracking-wider font-body">Recurso Vital</span>
+                </div>
+              </div>
+              
+              <p className="mt-3 font-body text-xs text-muted leading-relaxed">
+                Vital para el consumo y preparación de alimentos básicos en zonas afectadas.
+              </p>
+              
+              <div className="mt-4 flex-1 flex flex-col gap-3">
+                {/* Aceptado (SÍ) */}
+                <div className="rounded-lg bg-success-bg p-3 border border-success/15 flex flex-col gap-1.5">
+                  <span className="inline-flex items-center gap-1 font-body text-[10px] font-extrabold uppercase tracking-wider text-success-ink select-none">
+                    <CheckCircle className="h-3.5 w-3.5 text-success" />
+                    ¿Qué traer?
+                  </span>
+                  <ul className="font-body text-xs text-body leading-relaxed space-y-1">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Agua embotellada y sellada (original)</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Suero oral (líquido o en polvo)</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Bebidas hidratantes y electrolitos</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Rechazado (NO) */}
+                <div className="rounded-lg bg-danger-bg p-3 border border-danger/15 flex flex-col gap-1.5">
+                  <span className="inline-flex items-center gap-1 font-body text-[10px] font-extrabold uppercase tracking-wider text-danger-ink select-none">
+                    <XCircle className="h-3.5 w-3.5 text-danger" />
+                    ¿Qué evitar?
+                  </span>
+                  <ul className="font-body text-xs text-body leading-relaxed space-y-1">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Agua envasada de procedencia casera</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Botellas o galones previamente abiertos</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* 5. Ropa y Cobijo */}
+            <div className="group relative flex flex-col rounded-xl border border-line-soft bg-surface p-5 hover:scale-[1.02] hover:-translate-y-1 hover:border-purple-500/50 hover:shadow-[0_16px_36px_rgba(168,85,247,0.12)] transition-all duration-300">
+              <div className="flex items-center gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shrink-0">
+                  <Shirt className="h-6 w-6" />
+                </span>
+                <div>
+                  <h3 className="font-display text-sm font-black tracking-tight text-ink group-hover:text-purple-600 transition-colors">
+                    Ropa, Calzado y Cobijo
+                  </h3>
+                  <span className="text-[10px] font-bold text-purple-600 uppercase tracking-wider font-body">Protección y Abrigo</span>
+                </div>
+              </div>
+              
+              <p className="mt-3 font-body text-xs text-muted leading-relaxed">
+                Prendas de vestir y artículos de abrigo para resguardar a las personas del clima.
+              </p>
+              
+              <div className="mt-4 flex-1 flex flex-col gap-3">
+                {/* Aceptado (SÍ) */}
+                <div className="rounded-lg bg-success-bg p-3 border border-success/15 flex flex-col gap-1.5">
+                  <span className="inline-flex items-center gap-1 font-body text-[10px] font-extrabold uppercase tracking-wider text-success-ink select-none">
+                    <CheckCircle className="h-3.5 w-3.5 text-success" />
+                    ¿Qué traer?
+                  </span>
+                  <ul className="font-body text-xs text-body leading-relaxed space-y-1">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Cobijas, frazadas y sábanas limpias</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Ropa en buen estado (lavada y lista)</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Zapatos cómodos / calzado deportivo</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Rechazado (NO) */}
+                <div className="rounded-lg bg-danger-bg p-3 border border-danger/15 flex flex-col gap-1.5">
+                  <span className="inline-flex items-center gap-1 font-body text-[10px] font-extrabold uppercase tracking-wider text-danger-ink select-none">
+                    <XCircle className="h-3.5 w-3.5 text-danger" />
+                    ¿Qué evitar?
+                  </span>
+                  <ul className="font-body text-xs text-body leading-relaxed space-y-1">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Ropa rota, sucia, mojada o húmeda</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Zapatos de tacón alto o calzado roto</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Ropa interior usada</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* 6. Herramientas y Logística */}
+            <div className="group relative flex flex-col rounded-xl border border-line-soft bg-surface p-5 hover:scale-[1.02] hover:-translate-y-1 hover:border-orange-500/50 hover:shadow-[0_16px_36px_rgba(249,115,22,0.12)] transition-all duration-300">
+              <div className="flex items-center gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-500/10 text-orange-600 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shrink-0">
+                  <Wrench className="h-6 w-6" />
+                </span>
+                <div>
+                  <h3 className="font-display text-sm font-black tracking-tight text-ink group-hover:text-orange-600 transition-colors">
+                    Herramientas y Logística
+                  </h3>
+                  <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider font-body">Soporte y Rescate</span>
+                </div>
+              </div>
+              
+              <p className="mt-3 font-body text-xs text-muted leading-relaxed">
+                Artículos auxiliares para la remoción de escombros o iluminación de emergencia.
+              </p>
+              
+              <div className="mt-4 flex-1 flex flex-col gap-3">
+                {/* Aceptado (SÍ) */}
+                <div className="rounded-lg bg-success-bg p-3 border border-success/15 flex flex-col gap-1.5">
+                  <span className="inline-flex items-center gap-1 font-body text-[10px] font-extrabold uppercase tracking-wider text-success-ink select-none">
+                    <CheckCircle className="h-3.5 w-3.5 text-success" />
+                    ¿Qué traer?
+                  </span>
+                  <ul className="font-body text-xs text-body leading-relaxed space-y-1">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Linternas con baterías y pilas</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Velas y fósforos (cerillas)</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Cuerdas, palas y herramientas básicas</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-success font-bold shrink-0">✓</span>
+                      <span>Guantes de trabajo y tapabocas</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Rechazado (NO) */}
+                <div className="rounded-lg bg-danger-bg p-3 border border-danger/15 flex flex-col gap-1.5">
+                  <span className="inline-flex items-center gap-1 font-body text-[10px] font-extrabold uppercase tracking-wider text-danger-ink select-none">
+                    <XCircle className="h-3.5 w-3.5 text-danger" />
+                    ¿Qué evitar?
+                  </span>
+                  <ul className="font-body text-xs text-body leading-relaxed space-y-1">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Combustibles en envases inseguros</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-danger font-bold shrink-0">✗</span>
+                      <span>Artículos pirotécnicos o inflamables</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
         </Card>
 
         <div className="mt-6 flex items-center justify-center">
