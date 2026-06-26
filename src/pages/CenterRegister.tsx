@@ -12,12 +12,12 @@ import {
   Globe,
   CheckCircle2,
 } from 'lucide-react';
-import { Button, Card, Input, Checkbox } from '@/components/ui';
+import { Button, Card, Input, Checkbox, AddressInput } from '@/components/ui';
 import { PhoneField, ScheduleField, EMPTY_PHONE, type PhoneValue } from '@/components/form';
 import { cn } from '@/lib/utils';
 import { useMutation } from '@/lib/hooks/useMutation';
 import { registerCenter } from '@/lib/api/auth';
-import { forwardGeocode, DEFAULT_LATLNG } from '@/lib/geo';
+import { DEFAULT_LATLNG, type LatLng } from '@/lib/geo';
 import { EMPTY_BLOCK, isScheduleValid, serializeSchedule, type ScheduleBlock } from '@/lib/schedule';
 import {
   isValidEmail,
@@ -78,6 +78,7 @@ export function CenterRegister() {
   // true cuando el alta requiere confirmar el correo antes de crear el centro.
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [selectedCoords, setSelectedCoords] = useState<LatLng | null>(null);
   const register = useMutation(registerCenter);
   const loading = register.loading;
 
@@ -85,6 +86,11 @@ export function CenterRegister() {
 
   function set<K extends keyof Fields>(key: K, value: string) {
     setFields((f) => ({ ...f, [key]: value }));
+  }
+
+  function handleAddressSelect(address: string, lat: number, lng: number) {
+    set('address', address);
+    setSelectedCoords({ lat, lng });
   }
 
   /** Valida solo los campos del paso indicado. */
@@ -140,9 +146,7 @@ export function CenterRegister() {
     }
 
     try {
-      // Geocodifica la dirección para ubicar el centro en el mapa. Si falla,
-      // usa un respaldo (un coordinador puede ajustar la posición al aprobar).
-      const coords = (await forwardGeocode(fields.address)) ?? DEFAULT_LATLNG;
+      const coords = selectedCoords ?? DEFAULT_LATLNG;
       const result = await register.mutate({
         email: fields.email,
         password: fields.password,
@@ -272,13 +276,13 @@ export function CenterRegister() {
                       onChange={(e) => set('organization', e.target.value)}
                       error={errors.organization}
                     />
-                    <Input
+                    <AddressInput
                       label="Dirección"
-                      requiredMark
                       placeholder="Av. Francisco de Miranda, Chacao, Caracas"
                       leadingIcon={<MapPin className="h-4 w-4" aria-hidden />}
                       value={fields.address}
                       onChange={(e) => set('address', e.target.value)}
+                      onSelect={handleAddressSelect}
                       error={errors.address}
                     />
                     <ScheduleField
