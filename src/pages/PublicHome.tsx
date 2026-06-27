@@ -19,6 +19,8 @@ import {
   SuggestCenterModal,
 } from '@/components/domain';
 import { CenterMap } from '@/components/map/CenterMap';
+import { cn } from '@/lib/utils';
+
 
 /* ===========================================================================
    Vista pública / Home (PRD Módulo 1 · Propuesta 02 "Vista A").
@@ -245,6 +247,7 @@ export function PublicHome() {
   // Centro abierto en la ficha ampliada (contacto + redes). `null` = modal cerrado.
   const [detailCenter, setDetailCenter] = useState<Center | null>(null);
   const [suggestModalOpen, setSuggestModalOpen] = useState(false);
+  const [activeMobileTab, setActiveMobileTab] = useState<'centers' | 'info'>('centers');
 
   // Control para inicializar el centro más cercano una sola vez cuando
   // coincidan la disponibilidad de la ubicación y de los centros cargados.
@@ -452,16 +455,16 @@ export function PublicHome() {
               onClick={() => setSuggestModalOpen(true)}
               leftIcon={<Plus className="h-4 w-4" />}
             >
-              <span className="hidden sm:inline">Agregar nuevo centro</span>
-              <span className="sm:hidden">Agregar</span>
+              <span className="hidden md:inline">Agregar nuevo centro</span>
+              <span className="hidden sm:inline md:hidden">Agregar</span>
             </Button>
             <Link
               to="/admin/login"
-              className="inline-flex h-control-sm items-center justify-center gap-2 whitespace-nowrap rounded-pill bg-rojo px-4 font-display text-2xs font-black tracking-snug text-white transition hover:brightness-95 active:brightness-90"
+              className="inline-flex h-control-sm items-center justify-center gap-2 whitespace-nowrap rounded-pill bg-rojo px-3 sm:px-4 font-display text-2xs font-black tracking-snug text-white transition hover:brightness-95 active:brightness-90"
             >
               <Building2 className="h-4 w-4" aria-hidden />
-              <span className="hidden sm:inline">¿Eres un centro?</span>
-              <span className="sm:hidden">Centro</span>
+              <span className="hidden md:inline">¿Eres un centro?</span>
+              <span className="hidden sm:inline md:hidden">Centro</span>
             </Link>
           </div>
         </div>
@@ -553,8 +556,39 @@ export function PublicHome() {
         </div>
       </section>
 
+      {/* Selector de Pestañas (Solo Mobile/Tablet) */}
+      <div className="sticky top-[61px] z-20 bg-bg/95 backdrop-blur border-b border-line-soft lg:hidden">
+        <div className="mx-auto flex max-w-6xl px-4">
+          <button
+            onClick={() => setActiveMobileTab('centers')}
+            className={cn(
+              "flex-1 py-3 text-center font-display text-[11px] font-black uppercase tracking-wider transition-all duration-200 border-b-2",
+              activeMobileTab === 'centers'
+                ? "border-rojo text-rojo"
+                : "border-transparent text-muted hover:text-ink"
+            )}
+          >
+            Explorar Centros
+          </button>
+          <button
+            onClick={() => setActiveMobileTab('info')}
+            className={cn(
+              "flex-1 py-3 text-center font-display text-[11px] font-black uppercase tracking-wider transition-all duration-200 border-b-2",
+              activeMobileTab === 'info'
+                ? "border-rojo text-rojo"
+                : "border-transparent text-muted hover:text-ink"
+            )}
+          >
+            Información y Guía
+          </button>
+        </div>
+      </div>
+
       {/* Lista (dominante) + mapa (apoyo) */}
-      <section className="mx-auto mt-5 flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 lg:grid lg:grid-cols-[1.25fr_1fr]">
+      <section className={cn(
+        "mx-auto mt-5 flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 lg:grid lg:grid-cols-[1.25fr_1fr]",
+        activeMobileTab !== 'centers' && "hidden lg:grid"
+      )}>
         {/* Lista */}
         <div className="scrollbar-thin order-2 flex flex-col gap-3 lg:order-1 lg:sticky lg:top-20 lg:max-h-[70vh] lg:overflow-y-auto lg:pr-1">
           <QueryBoundary
@@ -597,7 +631,7 @@ export function PublicHome() {
         </div>
 
         {/* Mapa de apoyo */}
-        <div className="order-1 lg:order-2 sticky top-20 z-10 lg:static lg:z-0">
+        <div className="order-1 lg:order-2 lg:static lg:z-0">
           <div className="h-52 overflow-hidden rounded-xl border border-line-soft shadow-card lg:sticky lg:top-20 lg:h-[70vh]">
             <CenterMap
               centers={approvedCenters}
@@ -611,7 +645,10 @@ export function PublicHome() {
       </section>
 
       {/* Gráfico general de la red (§1.C) */}
-      <section className="mx-auto mt-10 w-full max-w-6xl px-4 pb-6">
+      <section className={cn(
+        "mx-auto mt-10 w-full max-w-6xl px-4 pb-6",
+        activeMobileTab !== 'info' && "hidden lg:block"
+      )}>
         <Card>
           <div className="mb-4 flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-azul" aria-hidden />
@@ -662,7 +699,10 @@ export function PublicHome() {
       </section>
 
       {/* Guía Informativa de Insumos Permitidos */}
-      <section className="mx-auto w-full max-w-6xl px-4 pb-16">
+      <section className={cn(
+        "mx-auto w-full max-w-6xl px-4 pb-16",
+        activeMobileTab !== 'info' && "hidden lg:block"
+      )}>
         <Card className="p-6 border border-line-soft shadow-card">
           <div className="mb-6 border-b border-line-soft pb-4">
             <h2 className="font-display text-h3 font-black tracking-snug text-ink flex items-center gap-2">
