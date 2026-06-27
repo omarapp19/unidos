@@ -433,8 +433,14 @@ export function PublicHome() {
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 shrink-0">
-            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-rojo text-white shrink-0">
-              <MapPin className="h-5 w-5" aria-hidden />
+            <span className="logo-badge flex h-9 w-9 items-center justify-center rounded-md shrink-0">
+              <img
+                src="/logo-mark.png"
+                alt="Centros de Acopio Venezuela"
+                className="h-full w-full object-contain"
+                width={36}
+                height={36}
+              />
             </span>
             <span className="flex flex-col leading-none min-w-0">
               <span className="font-display text-h3 font-black tracking-snug text-ink">Unidos</span>

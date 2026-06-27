@@ -15,11 +15,13 @@ CREATE TABLE IF NOT EXISTS help_categories (
 ALTER TABLE help_categories ENABLE ROW LEVEL SECURITY;
 
 -- Lectura pública (landing y páginas de ayuda)
+DROP POLICY IF EXISTS "public_read_help_categories" ON help_categories;
 CREATE POLICY "public_read_help_categories"
   ON help_categories FOR SELECT
   USING (true);
 
 -- Solo superadmin puede escribir
+DROP POLICY IF EXISTS "superadmin_write_help_categories" ON help_categories;
 CREATE POLICY "superadmin_write_help_categories"
   ON help_categories FOR ALL
   USING (
@@ -44,10 +46,12 @@ CREATE TABLE IF NOT EXISTS help_links (
 
 ALTER TABLE help_links ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "public_read_help_links" ON help_links;
 CREATE POLICY "public_read_help_links"
   ON help_links FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "superadmin_write_help_links" ON help_links;
 CREATE POLICY "superadmin_write_help_links"
   ON help_links FOR ALL
   USING (

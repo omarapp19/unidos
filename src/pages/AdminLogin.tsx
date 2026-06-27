@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MapPin, Mail, Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, Input } from '@/components/ui';
 
@@ -58,9 +58,13 @@ export function AdminLogin() {
       <main className="flex flex-1 items-center justify-center px-4 pb-16">
         <Card className="w-full max-w-md">
           <div className="mb-6 flex flex-col items-center text-center">
-            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-rojo text-white">
-              <MapPin className="h-6 w-6" aria-hidden />
-            </span>
+            <img
+              src="/logo-mark.png"
+              alt="Centros de Acopio Venezuela"
+              className="mb-3 h-20 w-20 object-contain"
+              width={80}
+              height={80}
+            />
             <h1 className="font-display text-h2 font-black tracking-snug text-ink">
               Panel del centro
             </h1>
