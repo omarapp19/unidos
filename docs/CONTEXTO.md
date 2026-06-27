@@ -5,10 +5,11 @@
 (React + Vercel · backend Supabase conectado)
 
 > **Estado:** MVP lanzado el 27-jun-2026. Construido por un equipo de 5 (Omar, Sofía,
-> Kevin, Jonathan, Sebastián) en ~1 día tras el terremoto del 24-jun. Ya se difunde
-> entre contactos cercanos; falta la difusión masiva (influencers/periodistas) y
-> blindar la infra para tráfico alto. **Competencia activa** ya publicó plataformas
-> similares — nuestra ventaja: mapa + centro más cercano automático + portal de enlaces.
+> Kevin, Jonathan, Sebastián) en ~1 día tras el terremoto del 24-jun. Logo y minikit
+> de difusión ya listos; falta el **envío masivo** (influencers/periodistas), blindar
+> la infra para tráfico alto y depurar el backlog de ~477 centros scrapeados.
+> **Competencia activa** ya publicó plataformas similares y difunde rápido — nuestra
+> ventaja: mapa + centro más cercano automático + portal de enlaces unificado.
 
 ---
 
@@ -103,13 +104,23 @@ supabase/
 - ✅ **Superadmin operativo**: login desde el mismo formulario; aprobar/rechazar
   centros, registrar centros, gestionar Portal de Ayuda. Primeros superadmins
   sembrados (Omar, Sofía, Kevin, Jonathan, Sebastián).
-- ✅ Carga inicial de datos: >60 centros verificados por CSV + tanda de scraping
-  de otra plataforma (pendientes de aprobación uno por uno).
+- ✅ Carga inicial de datos: >60 centros verificados por CSV + **477 centros más
+  scrapeados** de `centrosdeacopiovzla.com` (incluye otros países; cargados como
+  pendientes — hay que aprobarlos/descartarlos uno por uno, ojo con repetidos).
 - ✅ Categorías principales sembradas vía migración (incluye insumos médicos).
 - ✅ Fix 404 al refrescar rutas profundas; lista de pendientes con scroll y filtros.
+- ✅ **Logo e identidad propios**: diseñadora externa entregó dos propuestas, el
+  equipo votó la opción 1 (5 votos). Logo + favicon integrados en la web y en los
+  menús de admin/superadmin (PR #6, rama `feat/brand-logo-favicon`).
+- ✅ **Guard de seguridad**: restricción en BD para que un admin de centro no pueda
+  aprobar su propio centro (PR #5; migración idempotente, no cambia datos en prod).
+- ✅ **Minikit de difusión listo**: copy largo + versión corta para redes (Sebastián),
+  imagen formato Story, enlace limpio. Falta solo enviarlo a influencers/periodistas.
 
 > **Flujo git del equipo:** trabajar en rama `develop`, hacer merge a `master` solo
 > cuando esté consolidado (cada push a `master` consume minutos de despliegue Vercel).
+> **Gestión de tareas:** se está montando un board en **Trello** para repartir
+> trabajo; este archivo y `PRD.md` siguen como referencia de contexto.
 
 ## 7. Tareas pendientes (por prioridad)
 
@@ -129,9 +140,15 @@ abundantes, (3) crecimiento/difusión, (4) mejoras de producto.
 - **Monitoreo de límites de capa gratuita (Supabase/Vercel).** Vigilar cuotas
   (lecturas/escrituras BD, ancho de banda). Tener listo el salto a plan Pro en un
   clic antes de que el proveedor corte el servicio (Omar cubre gastos operativos).
-- **Esconder gráfico/estadísticas con cantidades exactas.** Hoy muestra cantidades
-  numéricas (datos mock); rompe la regla de privacidad (PRD §7: solo porcentajes).
-  Ocultar esa sección hasta que el panel de inventario esté listo (fase siguiente).
+- **Esconder "Donaciones en Vivo" (cifras exactas).** Sección "Qué se está donando
+  en la red" → lado derecho: ticker que inventa cifras con `Math.random()` (ej.
+  "+12 Agua"). Datos mock; rompe la regla de privacidad (PRD §7: solo porcentajes).
+  **Decidido en equipo (Jonathan/Omar/Sofía): ocultarla** hasta tener datos reales;
+  reemplazar luego por cifras reales si se implementa realtime. *Pendiente aplicar.*
+- **Bug: centro se aprueba solo al registrarse.** Jonathan registró un centro nuevo
+  (botón "¿Eres un centro?") y, pese al mensaje de "esperar aprobación", quedó
+  **aprobado automáticamente** sin que nadie lo aprobara. Rompe el filtro anti-troles.
+  Investigar el flujo de `register_center`/estado inicial (debe nacer `pendiente`).
 - **Validar el flujo completo de registro de centro en prod** (eres un centro →
   registra, sugerir centro, y superadmin → registrar centro). Confirmar que la RPC
   `register_center` esté aplicada en Supabase (ya hubo error de "function not found"
@@ -139,27 +156,37 @@ abundantes, (3) crecimiento/difusión, (4) mejoras de producto.
 
 ### P1 — Confianza de datos y verificación
 
-- **Poblar la base de datos.** Seguir cargando centros: CSV del equipo, scraping de
-  otras plataformas (centrosdeacopiovenezuela.com ~190, redayudavenezuela.com,
-  cenital.help) confirmando la info. Pasar a aprobación uno por uno.
-- **Verificar/aprobar centros (humano en el loop).** Ningún centro se publica sin
-  aprobación de un superadmin (evita troles/datos falsos). Ya hay casos de
-  direcciones/coordenadas erróneas del scraping → corregir al aprobar. **Designar
-  voluntario(s) dedicados a filtrar** los registros entrantes.
+- **Verificar/aprobar el backlog de centros (humano en el loop).** Hay ~477 centros
+  scrapeados + tandas previas esperando aprobación uno por uno. Ningún centro se
+  publica sin aprobación de un superadmin (evita troles/datos falsos). Ya hay casos
+  reales: direcciones/coordenadas erróneas (pin en barrio equivocado), Instagram
+  faltante, **centros repetidos del scraping** → revisar bien y corregir al aprobar.
+  **Designar voluntario(s) dedicados a filtrar** los registros entrantes.
+- **Seguir poblando la BD.** Más scraping/CSV de otras plataformas
+  (centrosdeacopiovenezuela.com ~190, redayudavenezuela.com, cenital.help/hospitals)
+  confirmando la info antes de aprobar.
+- **Asignar un usuario a un centro huérfano.** Los centros creados por superadmin o
+  por "agregar/sugerir centro" no tienen administrador. Definir mecanismo: enviar
+  enlace de invitación al correo del centro desde su edición, o que al registrarse un
+  usuario pueda **reclamar un centro existente** (queda pendiente de aprobación del
+  superadmin, verificando que la persona esté ligada al centro para evitar fraude).
 - **Editar coordenadas/datos de un centro desde el panel** (corregir geocoding malo;
   ya se detectaron pines en lugar incorrecto).
 - **Recuperación de contraseña** (Supabase) en la UI — varios del equipo tuvieron
   fricción creando/accediendo a usuarios superadmin.
+- **Revisar error al agregar insumo crítico** (Sebastián reportó un error en esa
+  acción; confirmar si lo causó la migración del guard de auto-aprobación).
 
 ### P2 — Difusión y crecimiento
 
-- **Minikit de difusión:** copy de 3 líneas (corto y al grano) + imagen formato
-  Story/Post con el link bien visible + enlace limpio. Pendiente decidir quién lo
-  arma y a quién se envía.
-- **Estrategia de distribución:** enviar el kit a influencers, periodistas y cuentas
-  informativas que ya cubren la emergencia. Empezar por contactos cercanos (ya en
-  curso) y escalar cuando la app esté sólida.
-- **Logo / identidad.** Hoy se usa un ícono genérico; falta un logo propio.
+- ✅ **Minikit de difusión:** copy largo + versión corta para redes (Sebastián),
+  imagen formato Story, enlace limpio. Listo para usar.
+- ✅ **Logo / identidad** propios elegidos e integrados en la web (ver §6).
+- **Estrategia de distribución (lo que falta):** enviar el kit a influencers,
+  periodistas y cuentas informativas que ya cubren la emergencia. Empezar por
+  contactos cercanos (ya en curso) y escalar cuando la app esté sólida. **Definir
+  quién coordina el envío.** Nota: ya hay competencia difundiendo rápido — no
+  demorar demasiado el lanzamiento masivo.
 
 ### P3 — Resiliencia técnica e infraestructura
 
@@ -180,11 +207,20 @@ abundantes, (3) crecimiento/difusión, (4) mejoras de producto.
   lo que más necesita; cambia con el tiempo.
 - **Crear categorías desde la interfaz** del admin (las necesidades cambian a diario:
   comida, material médico, etc.).
-- Realtime opcional del stock en el dashboard (TRD §6 Módulo 3).
-- Filtros del mapa por insumo/zona/estado.
+- **Filtro por estado/país** (Kevin). La mayoría de centros son de Maracaibo, pero ya
+  hay de otros estados y países y la gente pregunta. Requiere ajustar la BD (campos
+  estado/país) y luego filtrar en el front. Útil al escalar la difusión.
+- **Mostrar "qué falta" y "qué ya tienen suficiente"** por centro (Jonathan), no solo
+  insumos urgentes, para que el donante sepa qué llevar.
+- **Cambiar a idioma inglés** (toggle) para extranjeros que quieran donar.
+- Realtime opcional del stock en el dashboard (TRD §6 Módulo 3); habilitaría
+  reemplazar el ticker mock por cifras reales.
+- Filtros del mapa por insumo/zona.
 - Tema oscuro (mejor para uso nocturno; pedido por el equipo).
-- Sección/redirección de personas desaparecidas (parcialmente cubierto por el Portal
-  de Ayuda; evaluar si hace falta botón propio).
+- **Video tutorial** de registro/login de un centro (pedido para la facultad de
+  medicina y similares).
+- Sección/redirección de personas desaparecidas (ya cubierto por el Portal de Ayuda;
+  Jonathan sugiere quitar el botón naranja dedicado por redundante).
 
 > Detalle de producto en `PRD.md`; detalle técnico y modelo de datos en
 > `REQUISITOS-TECNICOS.md`. Bugs y faltantes se anotan aquí y se van marcando hechos.
