@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Building2, Plus, Check, Trash2, Pencil, BadgeCheck, AtSign, Globe, Mail, Search } from 'lucide-react';
+import { Building2, Plus, Check, Trash2, Pencil, BadgeCheck, AtSign, Globe, Mail, Search, ShieldCheck } from 'lucide-react';
 import type { Center } from '@/types';
 import {
   getPendingCenters,
@@ -99,7 +99,7 @@ const STATUS_OPTIONS = [
 const PAGE_SIZE = 10;
 
 /** Carga incremental (lazy) de centros aprobados: 10 al inicio, más al hacer scroll. */
-function useApprovedCenters() {
+function useApprovedCenters(verifiedOnly: boolean, search: string) {
   const [rows, setRows] = useState<Center[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -111,14 +111,22 @@ function useApprovedCenters() {
   const lenRef = useRef(0);
 
   const load = useCallback(async (reset: boolean) => {
-    if (inFlightRef.current) return;
+    // Un loadMore se descarta si ya hay petición en curso; un reset (carga
+    // inicial o cambio de filtro) siempre procede e invalida lo anterior.
+    if (inFlightRef.current && !reset) return;
     inFlightRef.current = true;
     const runId = ++runIdRef.current;
+    if (reset) {
+      // Limpia de inmediato para que no queden filas obsoletas visibles aunque
+      // el resolve de esta petición pierda la carrera de runId.
+      lenRef.current = 0;
+      setRows([]);
+    }
     const offset = reset ? 0 : lenRef.current;
     setLoading(true);
     setError(null);
     try {
-      const page = await getApprovedCentersPage(offset, PAGE_SIZE);
+      const page = await getApprovedCentersPage(offset, PAGE_SIZE, verifiedOnly, search);
       if (runId !== runIdRef.current) return;
       setRows((prev) => {
         const next = reset ? page.rows : [...prev, ...page.rows];
@@ -137,7 +145,7 @@ function useApprovedCenters() {
         inFlightRef.current = false;
       }
     }
-  }, []);
+  }, [verifiedOnly, search]);
 
   useEffect(() => {
     load(true);
@@ -157,8 +165,16 @@ function useApprovedCenters() {
 }
 
 export function SuperCenters() {
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  // Debounce para no disparar una consulta por tecla en los aprobados (servidor).
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
   const pendingQ = useQuery(getPendingCenters, []);
-  const approvedList = useApprovedCenters();
+  const approvedList = useApprovedCenters(verifiedOnly, debouncedSearch);
   const approve = useMutation(approveCenter);
   const remove = useMutation(deleteCenter);
   const verify = useMutation((args: { id: string; value: boolean }) =>
@@ -362,8 +378,6 @@ export function SuperCenters() {
     approvedList.reload();
   }
 
-  const [searchQuery, setSearchQuery] = useState('');
-
   const pending = pendingQ.data ?? [];
   const approved = approvedList.rows;
 
@@ -373,11 +387,30 @@ export function SuperCenters() {
     )
   );
 
-  const filteredApproved = approved.filter((c) =>
-    [c.name, c.organization, c.address, c.email].some((field) =>
-      (field ?? '').toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  );
+  // Render incremental de pendientes: 10 al inicio, +10 al asomar el centinela.
+  const PENDING_PAGE = 10;
+  const [pendingVisible, setPendingVisible] = useState(PENDING_PAGE);
+  useEffect(() => {
+    setPendingVisible(PENDING_PAGE);
+  }, [searchQuery]);
+  const visiblePending = filteredPending.slice(0, pendingVisible);
+  const pendingScrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingSentinelRef = useRef<HTMLDivElement | null>(null);
+  const pendingHasMore = pendingVisible < filteredPending.length;
+  useEffect(() => {
+    const node = pendingSentinelRef.current;
+    if (!node || !pendingHasMore) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        setPendingVisible((v) => v + PENDING_PAGE);
+      }
+    }, { root: pendingScrollRef.current, rootMargin: '200px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [pendingHasMore]);
+
+  // Los aprobados ya vienen filtrados por el servidor (búsqueda + verificados).
+  const filteredApproved = approved;
 
   // Scroll infinito dentro del contenedor con scroll propio: carga la siguiente
   // página al asomar el centinela (root = el contenedor, no el viewport).
@@ -438,36 +471,49 @@ export function SuperCenters() {
           ) : filteredPending.length === 0 ? (
             <p className="text-xs text-muted font-body">No se encontraron centros pendientes que coincidan con la búsqueda.</p>
           ) : (
-            filteredPending.map((c) => (
-              <Card key={c.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-display text-base font-black text-ink">{c.name}</p>
-                  <p className="font-body text-sm text-muted">{c.organization} · {c.address}</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => onApprove(c.id)}
-                    leftIcon={<Check className="h-4 w-4" />}>Aprobar</Button>
-                  <Button size="sm" variant="ghost" onClick={() => onReject(c.id)}
-                    leftIcon={<Trash2 className="h-4 w-4" />}>Rechazar</Button>
-                </div>
-              </Card>
-            ))
+            <div
+              ref={pendingScrollRef}
+              className="scrollbar-thin flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-1"
+            >
+              {visiblePending.map((c) => (
+                <Card key={c.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-display text-base font-black text-ink">{c.name}</p>
+                    <p className="font-body text-sm text-muted">{c.organization} · {c.address}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => onApprove(c.id)}
+                      leftIcon={<Check className="h-4 w-4" />}>Aprobar</Button>
+                    <Button size="sm" variant="ghost" onClick={() => onReject(c.id)}
+                      leftIcon={<Trash2 className="h-4 w-4" />}>Rechazar</Button>
+                  </div>
+                </Card>
+              ))}
+              {pendingHasMore && <div ref={pendingSentinelRef} className="h-px" />}
+            </div>
           )}
         </section>
       </QueryBoundary>
 
       {/* Aprobados · carga incremental (10 por página) */}
       <section className="mt-6 flex flex-col gap-3">
-        <h2 className="font-display text-h3 font-black text-ink">
-          Aprobados ({approvedList.loadedOnce ? approvedList.total : '…'})
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-h3 font-black text-ink">
+            Aprobados ({approvedList.loadedOnce ? approvedList.total : '…'})
+          </h2>
+          <Button
+            size="sm"
+            variant={verifiedOnly ? 'primary' : 'secondary'}
+            onClick={() => setVerifiedOnly((v) => !v)}
+            leftIcon={<ShieldCheck className="h-4 w-4" />}
+          >
+            {verifiedOnly ? 'Mostrar todos' : 'Solo verificados'}
+          </Button>
+        </div>
         <div
           ref={scrollRef}
           className="scrollbar-thin flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-1"
         >
-          {approved.length > 0 && filteredApproved.length === 0 && (
-            <p className="text-xs text-muted font-body py-2">No se encontraron centros aprobados que coincidan con la búsqueda.</p>
-          )}
           {filteredApproved.map((c) => (
             <Card key={c.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-col gap-1">
@@ -515,11 +561,19 @@ export function SuperCenters() {
         </div>
 
         {approvedList.loadedOnce && approvedList.total === 0 && (
-          <EmptyState
-            icon={<Building2 className="h-6 w-6" />}
-            title="Sin centros aprobados"
-            description="Aprueba un centro pendiente o registra uno nuevo."
-          />
+          debouncedSearch.trim() || verifiedOnly ? (
+            <EmptyState
+              icon={<Building2 className="h-6 w-6" />}
+              title="Sin resultados"
+              description="Ningún centro aprobado coincide con la búsqueda o el filtro."
+            />
+          ) : (
+            <EmptyState
+              icon={<Building2 className="h-6 w-6" />}
+              title="Sin centros aprobados"
+              description="Aprueba un centro pendiente o registra uno nuevo."
+            />
+          )
         )}
       </section>
 
