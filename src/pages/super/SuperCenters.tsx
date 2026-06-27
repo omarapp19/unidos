@@ -609,9 +609,28 @@ export function SuperCenters() {
             error={errors.address}
           />
 
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Input
+              label="Latitud"
+              placeholder="10.644700"
+              inputMode="decimal"
+              value={form.lat}
+              onChange={(e) => set('lat', e.target.value)}
+              hint="Pégala desde Google Maps."
+            />
+            <Input
+              label="Longitud"
+              placeholder="-71.633100"
+              inputMode="decimal"
+              value={form.lng}
+              onChange={(e) => set('lng', e.target.value)}
+              hint="Mueve el pin en el mapa."
+            />
+          </div>
+
           <LocationField
-            lat={form.lat ? parseFloat(form.lat) : null}
-            lng={form.lng ? parseFloat(form.lng) : null}
+            lat={Number.isFinite(parseFloat(form.lat)) ? parseFloat(form.lat) : null}
+            lng={Number.isFinite(parseFloat(form.lng)) ? parseFloat(form.lng) : null}
             onChange={handleMapClick}
             hint="Haz clic en el mapa para situar el marcador. Actualiza coordenadas y dirección automáticamente. Si lo dejas vacío, se geocodifica desde la dirección."
           />
