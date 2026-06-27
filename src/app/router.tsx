@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { PublicHome } from '@/pages/PublicHome';
 import { PersonasDesaparecidas } from '@/pages/PersonasDesaparecidas';
+import { AyudaCategoria } from '@/pages/AyudaCategoria';
 import { AdminLogin } from '@/pages/AdminLogin';
 import { CenterRegister } from '@/pages/CenterRegister';
 import { AdminLayout } from '@/components/layout/AdminLayout';
@@ -22,6 +23,7 @@ import { SuperHelpResources } from '@/pages/super/SuperHelpResources';
 export const router = createBrowserRouter([
   { path: '/', element: <PublicHome /> },
   { path: '/personas-desaparecidas', element: <PersonasDesaparecidas /> },
+  { path: '/ayuda/:categoryId', element: <AyudaCategoria /> },
   { path: '/admin/login', element: <AdminLogin /> },
   { path: '/registro', element: <CenterRegister /> },
   {

@@ -61,6 +61,19 @@ export function deleteHelpCategory(id: string): Promise<void> {
   });
 }
 
+/** Obtiene una categoría por ID (lectura pública). */
+export function getHelpCategoryById(id: string): Promise<HelpCategory> {
+  return withRetry(async () => {
+    const { data, error } = await supabase
+      .from('help_categories')
+      .select('id, name, created_at')
+      .eq('id', id)
+      .single();
+    if (error) throw fromPostgrestError(error);
+    return data;
+  });
+}
+
 // ── Enlaces ───────────────────────────────────────────────────────────────────
 
 /** Lista los enlaces de una categoría ordenados por sort_order. */

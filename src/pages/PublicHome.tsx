@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, Stethoscope, TestTube, Pill, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X, Users, Link2, ChevronDown, ExternalLink } from 'lucide-react';
+import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, Stethoscope, TestTube, Pill, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X, Users, Link2, ChevronDown, ChevronRight } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { nearest, sortByDistance, reverseGeocode, type LatLng, DEFAULT_LATLNG } from '@/lib/geo';
 import { categoryTotals } from '@/lib/stats';
@@ -9,8 +9,8 @@ import { getApprovedCenters } from '@/lib/api/centers';
 import { getCategories } from '@/lib/api/categories';
 import { getNetworkDonationItems } from '@/lib/api/donations';
 import { getNeededSupplies } from '@/lib/api/supplies';
-import { getHelpCategories, getHelpLinks } from '@/lib/api/helpResources';
-import type { Center, HelpCategory } from '@/types';
+import { getHelpCategories } from '@/lib/api/helpResources';
+import type { Center } from '@/types';
 import { cn } from '@/lib/utils';
 import { Button, Card, Badge, Input, EmptyState, Spinner, QueryBoundary } from '@/components/ui';
 import {
@@ -250,12 +250,6 @@ export function PublicHome() {
   const [suggestModalOpen, setSuggestModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
-  const [selectedHelpCat, setSelectedHelpCat] = useState<HelpCategory | null>(null);
-  const helpLinksQuery = useQuery(
-    () => selectedHelpCat ? getHelpLinks(selectedHelpCat.id) : Promise.resolve([]),
-    [selectedHelpCat?.id],
-    !!selectedHelpCat,
-  );
 
   // Control para inicializar el centro más cercano una sola vez cuando
   // coincidan la disponibilidad de la ubicación y de los centros cargados.
@@ -490,66 +484,24 @@ export function PublicHome() {
               {portalOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setPortalOpen(false)} />
-                  <div className="absolute right-0 top-full z-50 mt-1.5 w-[400px] overflow-hidden rounded-2xl border border-line-soft bg-surface shadow-lg animate-[selectIn_150ms_ease-out]">
-                    <div className="flex flex-wrap gap-1.5 border-b border-line-soft p-3">
-                      {helpCatsQuery.loading && <Spinner size="sm" label="Cargando…" />}
+                  <div className="absolute right-0 top-full z-50 mt-1.5 w-64 overflow-hidden rounded-2xl border border-line-soft bg-surface shadow-lg animate-[selectIn_150ms_ease-out]">
+                    {helpCatsQuery.loading && (
+                      <div className="flex justify-center p-4">
+                        <Spinner size="sm" label="Cargando…" />
+                      </div>
+                    )}
+                    <div className="p-1.5">
                       {helpCatsQuery.data?.map((cat) => (
-                        <button
+                        <Link
                           key={cat.id}
-                          type="button"
-                          onClick={() => setSelectedHelpCat((prev) => (prev?.id === cat.id ? null : cat))}
-                          className={cn(
-                            'rounded-pill px-2.5 py-1 font-display text-2xs font-black transition',
-                            selectedHelpCat?.id === cat.id
-                              ? 'bg-azul text-white'
-                              : 'bg-surface-2 text-ink hover:bg-azul/10 hover:text-azul',
-                          )}
+                          to={`/ayuda/${cat.id}`}
+                          onClick={() => setPortalOpen(false)}
+                          className="flex items-center justify-between rounded-xl px-3 py-2.5 font-display text-sm font-bold text-ink transition hover:bg-surface-2 hover:text-azul"
                         >
                           {cat.name}
-                        </button>
+                          <ChevronRight className="h-4 w-4 text-muted" aria-hidden />
+                        </Link>
                       ))}
-                    </div>
-                    <div className="p-3">
-                      {!selectedHelpCat && (
-                        <p className="py-2 text-center font-body text-xs text-muted">
-                          Selecciona una categoría para ver sus recursos.
-                        </p>
-                      )}
-                      {selectedHelpCat && helpLinksQuery.loading && (
-                        <div className="flex justify-center py-3">
-                          <Spinner size="sm" label="Cargando recursos…" />
-                        </div>
-                      )}
-                      {selectedHelpCat && !helpLinksQuery.loading && (helpLinksQuery.data?.length ?? 0) === 0 && (
-                        <p className="py-2 text-center font-body text-xs text-muted">
-                          Sin recursos en esta categoría todavía.
-                        </p>
-                      )}
-                      {selectedHelpCat && !helpLinksQuery.loading && (helpLinksQuery.data?.length ?? 0) > 0 && (
-                        <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
-                          {helpLinksQuery.data!.map((link) => (
-                            <a
-                              key={link.id}
-                              href={link.href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="group flex items-start justify-between gap-3 rounded-xl border border-line-soft p-2.5 transition hover:border-azul hover:shadow-sm"
-                            >
-                              <div className="min-w-0">
-                                <p className="font-display text-xs font-bold text-ink transition-colors group-hover:text-azul">
-                                  {link.label}
-                                </p>
-                                {link.description && (
-                                  <p className="mt-0.5 line-clamp-1 font-body text-2xs text-muted">
-                                    {link.description}
-                                  </p>
-                                )}
-                              </div>
-                              <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 text-muted transition-colors group-hover:text-azul" aria-hidden />
-                            </a>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </>
@@ -624,53 +576,18 @@ export function PublicHome() {
                   <ChevronDown className={cn('h-4 w-4 text-muted transition-transform duration-200', portalOpen && 'rotate-180')} aria-hidden />
                 </button>
                 {portalOpen && (
-                  <div className="overflow-hidden rounded-2xl border border-line-soft bg-surface">
-                    <div className="flex flex-wrap gap-1.5 border-b border-line-soft p-3">
-                      {helpCatsQuery.data?.map((cat) => (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => setSelectedHelpCat((prev) => (prev?.id === cat.id ? null : cat))}
-                          className={cn(
-                            'rounded-pill px-2.5 py-1 font-display text-xs font-black transition',
-                            selectedHelpCat?.id === cat.id
-                              ? 'bg-azul text-white'
-                              : 'bg-surface-2 text-ink hover:bg-azul/10 hover:text-azul',
-                          )}
-                        >
-                          {cat.name}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="p-3">
-                      {!selectedHelpCat && (
-                        <p className="py-1 text-center font-body text-xs text-muted">
-                          Selecciona una categoría.
-                        </p>
-                      )}
-                      {selectedHelpCat && helpLinksQuery.loading && (
-                        <div className="flex justify-center py-3"><Spinner size="sm" label="Cargando…" /></div>
-                      )}
-                      {selectedHelpCat && !helpLinksQuery.loading && (helpLinksQuery.data?.length ?? 0) > 0 && (
-                        <div className="flex max-h-52 flex-col gap-1.5 overflow-y-auto">
-                          {helpLinksQuery.data!.map((link) => (
-                            <a
-                              key={link.id}
-                              href={link.href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={() => setMobileMenuOpen(false)}
-                              className="group flex items-start justify-between gap-3 rounded-xl border border-line-soft p-2.5 transition hover:border-azul"
-                            >
-                              <p className="font-display text-xs font-bold text-ink group-hover:text-azul">
-                                {link.label}
-                              </p>
-                              <ExternalLink className="h-3 w-3 shrink-0 text-muted group-hover:text-azul" aria-hidden />
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                  <div className="overflow-hidden rounded-2xl border border-line-soft bg-surface p-1.5">
+                    {helpCatsQuery.data?.map((cat) => (
+                      <Link
+                        key={cat.id}
+                        to={`/ayuda/${cat.id}`}
+                        onClick={() => { setPortalOpen(false); setMobileMenuOpen(false); }}
+                        className="flex items-center justify-between rounded-xl px-3 py-2.5 font-display text-sm font-bold text-ink transition hover:bg-surface-2 hover:text-azul"
+                      >
+                        {cat.name}
+                        <ChevronRight className="h-4 w-4 text-muted" aria-hidden />
+                      </Link>
+                    ))}
                   </div>
                 )}
               </div>
