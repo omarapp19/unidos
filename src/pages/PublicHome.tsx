@@ -521,6 +521,38 @@ export function PublicHome() {
 
           {/* Mobile Navigation Trigger */}
           <div className="flex sm:hidden items-center gap-1.5 shrink-0">
+            {/* Portal de Ayuda — visible siempre en mobile */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setPortalOpen((v) => !v)}
+                className="inline-flex h-9 items-center justify-center gap-1 whitespace-nowrap rounded-pill border border-line-soft bg-surface-2 px-3 font-display text-2xs font-black tracking-snug text-ink transition hover:border-azul/50 hover:text-azul"
+              >
+                <Link2 className="h-3.5 w-3.5" aria-hidden />
+                <span className="hidden min-[400px]:inline">Portal de Ayuda</span>
+                <ChevronDown className={cn('h-3 w-3 transition-transform duration-200', portalOpen && 'rotate-180')} aria-hidden />
+              </button>
+              {portalOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setPortalOpen(false)} />
+                  <div className="absolute right-0 top-full z-50 mt-1.5 w-56 overflow-hidden rounded-2xl border border-line-soft bg-surface shadow-lg animate-[selectIn_150ms_ease-out]">
+                    <div className="p-1.5">
+                      {helpCatsQuery.data?.map((cat) => (
+                        <Link
+                          key={cat.id}
+                          to={`/ayuda/${cat.id}`}
+                          onClick={() => setPortalOpen(false)}
+                          className="flex items-center justify-between rounded-xl px-3 py-2.5 font-display text-sm font-bold text-ink transition hover:bg-surface-2 hover:text-azul"
+                        >
+                          {cat.name}
+                          <ChevronRight className="h-4 w-4 text-muted" aria-hidden />
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
             <Button
               variant="ghost"
               size="sm"
@@ -564,35 +596,6 @@ export function PublicHome() {
                 <Users className="h-4 w-4" aria-hidden />
                 ¿Conoces personas desaparecidas?
               </Link>
-              {/* Portal de Ayuda — mobile */}
-              <div className="flex flex-col gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setPortalOpen((v) => !v)}
-                  className="flex h-11 w-full items-center justify-between gap-2 rounded-pill border border-line-soft bg-surface-2 px-5 font-display text-sm font-black tracking-snug text-ink transition hover:border-azul/50"
-                >
-                  <div className="flex items-center gap-2">
-                    <Link2 className="h-4 w-4" aria-hidden />
-                    Portal de Ayuda
-                  </div>
-                  <ChevronDown className={cn('h-4 w-4 text-muted transition-transform duration-200', portalOpen && 'rotate-180')} aria-hidden />
-                </button>
-                {portalOpen && (
-                  <div className="overflow-hidden rounded-2xl border border-line-soft bg-surface p-1.5">
-                    {helpCatsQuery.data?.map((cat) => (
-                      <Link
-                        key={cat.id}
-                        to={`/ayuda/${cat.id}`}
-                        onClick={() => { setPortalOpen(false); setMobileMenuOpen(false); }}
-                        className="flex items-center justify-between rounded-xl px-3 py-2.5 font-display text-sm font-bold text-ink transition hover:bg-surface-2 hover:text-azul"
-                      >
-                        {cat.name}
-                        <ChevronRight className="h-4 w-4 text-muted" aria-hidden />
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
 
               <Link
                 to="/admin/login"
@@ -767,8 +770,8 @@ export function PublicHome() {
           </QueryBoundary>
         </div>
 
-        {/* Mapa de apoyo */}
-        <div className="order-1 lg:order-2 lg:static lg:z-0">
+        {/* Mapa de apoyo — sticky en mobile y desktop */}
+        <div className="order-1 lg:order-2 sticky top-[105px] z-10 bg-bg lg:static lg:z-0">
           <div className="h-52 overflow-hidden rounded-xl border border-line-soft shadow-card lg:sticky lg:top-20 lg:h-[70vh]">
             <CenterMap
               centers={approvedCenters}
