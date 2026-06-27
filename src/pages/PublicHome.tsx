@@ -106,7 +106,11 @@ export function PublicHome() {
 
   // Carga bajo demanda: insumos faltantes y categorías recibidas del centro abierto en ficha.
   useEffect(() => {
-    if (!detailCenter) { setDetailFalta([]); setDetailRecibe([]); return; }
+    // Reset al cambiar de centro para no mostrar los chips del centro anterior
+    // mientras llegan los nuevos datos.
+    setDetailFalta([]);
+    setDetailRecibe([]);
+    if (!detailCenter) return;
     let active = true;
     getNeededSupplies(detailCenter.id)
       .then((rows) => { if (active) setDetailFalta(rows.map((r) => r.name)); })
@@ -525,8 +529,6 @@ export function PublicHome() {
                     Insumos Críticos Requeridos
                   </span>
                 </div>
-
-
               </div>
 
               <div className="flex flex-wrap gap-3 justify-center">
