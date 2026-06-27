@@ -33,6 +33,18 @@ import { CenterMap } from '@/components/map/CenterMap';
 
 const BAR_COLORS: CategoryBarColor[] = ['azul', 'amarillo', 'rojo', 'success'];
 
+/**
+ * Ejemplos representativos de lo que más se dona en el país. Solo se usan como
+ * orientación cuando aún no hay donaciones reales cargadas; en cuanto entran
+ * datos reales, la sección los reemplaza por el top real de la red.
+ */
+const FREQUENT_DONATION_EXAMPLES = [
+  'Agua potable',
+  'Ropa y calzado',
+  'Alimentos no perecederos',
+  'Kits de higiene personal',
+];
+
 /** Cuántos centros se cargan por tanda al scrollear. */
 const PAGE_SIZE = 6;
 
@@ -703,7 +715,26 @@ export function PublicHome() {
                     ))}
                   </ul>
                 ) : (
-                  <EmptyState title="Aún no hay datos" description="Todavía no se han registrado donaciones." />
+                  <div className="flex flex-col gap-2">
+                    <p className="font-body text-2xs text-muted">
+                      Ejemplos habituales mientras se registran las donaciones de la red.
+                    </p>
+                    <ul className="flex flex-col gap-2">
+                      {FREQUENT_DONATION_EXAMPLES.map((name, i) => (
+                        <li
+                          key={name}
+                          className="flex items-center gap-3 p-3 rounded-lg border border-line-soft bg-surface"
+                        >
+                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-success/10 text-success-ink font-display text-xs font-black shrink-0">
+                            {i + 1}
+                          </span>
+                          <span className="font-display text-sm font-black tracking-tight text-ink">
+                            {name}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             </div>
