@@ -19,6 +19,7 @@ import {
   CategoryBar,
   type CategoryBarColor,
   SuggestCenterModal,
+  OnboardingTour,
 } from '@/components/domain';
 import { CenterMap } from '@/components/map/CenterMap';
 
@@ -44,15 +45,43 @@ type GeoState = 'idle' | 'loading' | 'granted' | 'denied';
 function getSupplyIcon(name: string, sizeClass = 'h-4 w-4') {
   const n = name.toLowerCase();
   const cls = `${sizeClass} shrink-0`;
-  if (n.includes('med') || n.includes('salud') || n.includes('sanit')) {
+  
+  // 1. Insumos Médicos y Equipos de Salud (Rojo)
+  if (n.includes('med') || n.includes('salud') || n.includes('sanit') || n.includes('jering') || n.includes('gasa') || n.includes('venda')) {
     return <Stethoscope className={`${cls} text-rojo`} />;
   }
-  if (n.includes('ampoll') || n.includes('inyect')) {
+  
+  // 2. Ampollas e Inyectables (Azul)
+  if (n.includes('ampoll') || n.includes('inyect') || n.includes('suero')) {
     return <TestTube className={`${cls} text-azul`} />;
   }
-  if (n.includes('tablet') || n.includes('pastill') || n.includes('pild') || n.includes('medicament')) {
+  
+  // 3. Tabletas y Medicamientos (Amarillo)
+  if (n.includes('tablet') || n.includes('pastill') || n.includes('pild') || n.includes('medicament') || n.includes('capsul')) {
     return <Pill className={`${cls} text-amarillo`} />;
   }
+  
+  // 4. Agua e Hidratación (Azul)
+  if (n.includes('agua') || n.includes('hidrat') || n.includes('bebida') || n.includes('botella') || n.includes('jugo') || n.includes('liquido')) {
+    return <Droplet className={`${cls} text-azul`} />;
+  }
+  
+  // 5. Alimentos y Nutrición (Rojo)
+  if (n.includes('aliment') || n.includes('comid') || n.includes('leche') || n.includes('fruta') || n.includes('pan') || n.includes('arroz') || n.includes('pasta') || n.includes('enlat') || n.includes('atun') || n.includes('harina') || n.includes('grano')) {
+    return <Apple className={`${cls} text-rojo`} />;
+  }
+  
+  // 6. Ropa, Mantas y Cobijas (Verde)
+  if (n.includes('ropa') || n.includes('vest') || n.includes('cobija') || n.includes('sabana') || n.includes('abrigo') || n.includes('sueter') || n.includes('franela') || n.includes('zapato') || n.includes('media') || n.includes('manta') || n.includes('colchon')) {
+    return <Shirt className={`${cls} text-success`} />;
+  }
+  
+  // 7. Herramientas, Higiene y Otros (Amarillo / Warning)
+  if (n.includes('herramient') || n.includes('linterna') || n.includes('bateria') || n.includes('pila') || n.includes('pala') || n.includes('soga') || n.includes('cuerda') || n.includes('clavo') || n.includes('higiene') || n.includes('aseo') || n.includes('jabon') || n.includes('crema') || n.includes('pañal') || n.includes('toalla')) {
+    return <Wrench className={`${cls} text-warning-ink`} />;
+  }
+  
+  // Por defecto (Verde)
   return <HeartPulse className={`${cls} text-success`} />;
 }
 
@@ -1270,6 +1299,8 @@ export function PublicHome() {
         open={suggestModalOpen}
         onClose={() => setSuggestModalOpen(false)}
       />
+
+      <OnboardingTour />
     </div>
   );
 }
