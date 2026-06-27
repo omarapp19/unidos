@@ -75,7 +75,9 @@ export function CenterDetailModal({
 }: CenterDetailModalProps) {
   if (!center) return null;
 
-  const directions = buildDirectionsUrl(center.lat, center.lng, center.name);
+  // El nombre es opcional; si falta, usamos la organización como título.
+  const title = center.name?.trim() || center.organization;
+  const directions = buildDirectionsUrl(center.lat, center.lng, title);
   const hasContact =
     center.phone || center.whatsapp || center.instagram || center.website || center.email;
 
@@ -83,7 +85,7 @@ export function CenterDetailModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={center.name}
+      title={title}
       subtitle={
         <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
           <span>{center.organization}</span>

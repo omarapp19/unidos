@@ -1,5 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { PublicHome } from '@/pages/PublicHome';
+import { PersonasDesaparecidas } from '@/pages/PersonasDesaparecidas';
+import { AyudaCategoria } from '@/pages/AyudaCategoria';
 import { AdminLogin } from '@/pages/AdminLogin';
 import { CenterRegister } from '@/pages/CenterRegister';
 import { AdminLayout } from '@/components/layout/AdminLayout';
@@ -11,6 +13,7 @@ import { RequireRole } from '@/components/layout/RequireRole';
 import { SuperCenters } from '@/pages/super/SuperCenters';
 import { SuperCategories } from '@/pages/super/SuperCategories';
 import { SuperSupplies } from '@/pages/super/SuperSupplies';
+import { SuperHelpResources } from '@/pages/super/SuperHelpResources';
 
 /* ===========================================================================
    Rutas del MVP (PRD). Público sin login en `/`; panel privado bajo `/admin`.
@@ -19,6 +22,8 @@ import { SuperSupplies } from '@/pages/super/SuperSupplies';
 
 export const router = createBrowserRouter([
   { path: '/', element: <PublicHome /> },
+  { path: '/personas-desaparecidas', element: <PersonasDesaparecidas /> },
+  { path: '/ayuda/:categoryId', element: <AyudaCategoria /> },
   { path: '/admin/login', element: <AdminLogin /> },
   { path: '/registro', element: <CenterRegister /> },
   {
@@ -43,6 +48,7 @@ export const router = createBrowserRouter([
       { path: 'centros', element: <SuperCenters /> },
       { path: 'categorias', element: <SuperCategories /> },
       { path: 'insumos', element: <SuperSupplies /> },
+      { path: 'recursos', element: <SuperHelpResources /> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

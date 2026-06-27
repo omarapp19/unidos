@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Building2, Plus, Check, Trash2, Pencil, BadgeCheck, AtSign, Globe, Mail, Search } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import type { Center } from '@/types';
 import {
   getPendingCenters,
@@ -49,7 +46,13 @@ import {
   CenterStatusBadge,
   VerifiedBadge,
 } from '@/components/ui';
-import { PhoneField, ScheduleField, EMPTY_PHONE, type PhoneValue } from '@/components/form';
+import {
+  PhoneField,
+  ScheduleField,
+  LocationField,
+  EMPTY_PHONE,
+  type PhoneValue,
+} from '@/components/form';
 
 /* ===========================================================================
    Panel de superadmin · gestión de centros: aprobar/rechazar pendientes,
@@ -86,43 +89,6 @@ const EMPTY_FORM: FormState = {
   lat: '',
   lng: '',
 };
-
-const pinIcon = L.divIcon({
-  className: '',
-  html: `<div style="
-    width: 30px; height: 30px;
-    background: var(--color-rojo);
-    border: 3px solid #fff; border-radius: 50% 50% 50% 0;
-    transform: rotate(-45deg);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-  "></div>`,
-  iconSize: [30, 30],
-  iconAnchor: [15, 30],
-});
-
-function LocationPickerMap({
-  lat,
-  lng,
-  onChange,
-}: {
-  lat: number;
-  lng: number;
-  onChange: (lat: number, lng: number) => void;
-}) {
-  const map = useMap();
-
-  useEffect(() => {
-    map.panTo([lat, lng]);
-  }, [lat, lng, map]);
-
-  useMapEvents({
-    click(e) {
-      onChange(e.latlng.lat, e.latlng.lng);
-    },
-  });
-
-  return <Marker position={[lat, lng]} icon={pinIcon} />;
-}
 
 const STATUS_OPTIONS = [
   { value: 'receiving', label: 'Abierto (Recibiendo donaciones)' },
@@ -286,7 +252,7 @@ export function SuperCenters() {
 
   function validate(): Errors {
     const e: Errors = {};
-    if (!form.name.trim()) e.name = 'Ingresa el nombre.';
+    // Solo obligatorios: organización y dirección (consistente con los otros forms).
     if (!form.organization.trim()) e.organization = 'Indica la organización.';
     if (!form.address.trim()) e.address = 'Ingresa la dirección.';
     // Horario opcional, pero si se empezó a llenar debe quedar completo.
@@ -566,7 +532,7 @@ export function SuperCenters() {
           : 'Corrige datos o coordenadas (re-geocodifica al cambiar la dirección).'}
       >
         <form onSubmit={onSubmit} className="flex flex-col gap-3" noValidate>
-          <Input label="Nombre" requiredMark placeholder="Liceo Andrés Bello"
+          <Input label="Nombre (opcional)" placeholder="Liceo Andrés Bello"
             value={form.name} onChange={(e) => set('name', e.target.value)} error={errors.name} />
           <Input label="Organización" requiredMark placeholder="Cruz Roja Venezolana"
             value={form.organization} onChange={(e) => set('organization', e.target.value)}
@@ -577,6 +543,7 @@ export function SuperCenters() {
             placeholder="Av. Francisco de Miranda, Caracas"
             value={form.address}
             onChange={(e) => set('address', e.target.value)}
+            proximity={form.lat && form.lng ? { lat: parseFloat(form.lat), lng: parseFloat(form.lng) } : null}
             onSelect={(address, lat, lng) => {
               setForm((f) => ({
                 ...f,
@@ -588,52 +555,12 @@ export function SuperCenters() {
             error={errors.address}
           />
 
-          <div className="flex flex-col gap-1.5">
-            <label className="font-body text-sm font-semibold text-ink">
-              Ubicación en el mapa
-            </label>
-            <div className="h-48 w-full overflow-hidden rounded-xl border border-line z-0">
-              <MapContainer
-                center={[
-                  parseFloat(form.lat) || 10.4806,
-                  parseFloat(form.lng) || -66.9036
-                ]}
-                zoom={13}
-                scrollWheelZoom
-                style={{ height: '100%', width: '100%' }}
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                <LocationPickerMap
-                  lat={parseFloat(form.lat) || 10.4806}
-                  lng={parseFloat(form.lng) || -66.9036}
-                  onChange={handleMapClick}
-                />
-              </MapContainer>
-            </div>
-            <p className="font-body text-xs text-muted">
-              Haz clic en el mapa para situar el marcador. Esto actualizará las coordenadas y la dirección automáticamente.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Latitud (opcional)"
-              placeholder="Ej: 10.4806"
-              value={form.lat}
-              onChange={(e) => set('lat', e.target.value)}
-              hint="Se geocodifica automáticamente si se deja vacío."
-            />
-            <Input
-              label="Longitud (opcional)"
-              placeholder="Ej: -66.9036"
-              value={form.lng}
-              onChange={(e) => set('lng', e.target.value)}
-              hint="Se geocodifica automáticamente si se deja vacío."
-            />
-          </div>
+          <LocationField
+            lat={form.lat ? parseFloat(form.lat) : null}
+            lng={form.lng ? parseFloat(form.lng) : null}
+            onChange={handleMapClick}
+            hint="Haz clic en el mapa para situar el marcador. Actualiza coordenadas y dirección automáticamente. Si lo dejas vacío, se geocodifica desde la dirección."
+          />
 
           <Select
             label="Estado del centro"

@@ -15,11 +15,17 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { Button, Card, Input, Checkbox, AddressInput } from '@/components/ui';
-import { PhoneField, ScheduleField, EMPTY_PHONE, type PhoneValue } from '@/components/form';
+import {
+  PhoneField,
+  ScheduleField,
+  LocationField,
+  EMPTY_PHONE,
+  type PhoneValue,
+} from '@/components/form';
 import { cn } from '@/lib/utils';
 import { useMutation } from '@/lib/hooks/useMutation';
 import { registerCenter } from '@/lib/api/auth';
-import { DEFAULT_LATLNG, type LatLng } from '@/lib/geo';
+import { DEFAULT_LATLNG, reverseGeocodeAddress, type LatLng } from '@/lib/geo';
 import { EMPTY_BLOCK, isScheduleValid, serializeSchedule, type ScheduleBlock } from '@/lib/schedule';
 import {
   isValidEmail,
@@ -36,8 +42,9 @@ import {
    Registro de un centro de acopio (PRD Módulo 2 · alta de cuenta) en 3 pasos:
      1. Datos del centro (obligatorio)   2. Cuenta y contacto (obligatorio)
      3. Redes y web (opcional, se pueden completar luego desde el panel).
-   Geocodifica la dirección (OSM) y crea la cuenta + el centro (is_approved=false)
-   + perfil del admin de forma atómica vía RPC `register_center`.
+   Crea la cuenta + el centro (is_approved=false, pendiente de aprobación) +
+   el perfil del admin de forma atómica vía RPC `register_center`. La ubicación
+   se elige con el mapa (o autocompletar la dirección).
    ========================================================================== */
 
 type Fields = {
@@ -51,7 +58,7 @@ type Fields = {
   confirm: string;
 };
 
-type FieldKey = keyof Fields | 'phone' | 'schedule';
+type FieldKey = keyof Fields | 'phone' | 'schedule' | 'location';
 type Errors = Partial<Record<FieldKey, string>>;
 
 const EMPTY: Fields = {
@@ -98,18 +105,31 @@ export function CenterRegister() {
     setSelectedCoords({ lat, lng });
   }
 
+  /** Click en el mapa: fija coords y reverse-geocodifica para rellenar dirección. */
+  async function handleMapClick(lat: number, lng: number) {
+    setSelectedCoords({ lat, lng });
+    const resolved = await reverseGeocodeAddress({ lat, lng });
+    if (resolved) set('address', resolved);
+  }
+
   /** Valida solo los campos del paso indicado. */
   function validateStep(i: number): Errors {
     const e: Errors = {};
     if (i === 0) {
-      if (!fields.name.trim()) e.name = 'Ingresa el nombre del centro.';
+      // Obligatorios: organización, dirección y ubicación. El resto es opcional.
       if (!fields.organization.trim()) e.organization = 'Indica la organización autorizante.';
       if (!fields.address.trim()) e.address = 'Ingresa la dirección.';
-      if (!isScheduleValid(schedule))
-        e.schedule = 'Selecciona al menos un día con su hora de apertura y cierre.';
+      if (!selectedCoords) e.location = 'Selecciona la ubicación en el mapa.';
+      // El horario es opcional, pero si se empezó a llenar debe quedar completo.
+      const scheduleTouched = schedule.some(
+        (b) => b.days.length > 0 || b.open !== '' || b.close !== '',
+      );
+      if (scheduleTouched && !isScheduleValid(schedule))
+        e.schedule = 'Completa día, apertura y cierre, o deja el horario vacío.';
     } else if (i === 1) {
-      if (!phone.number.trim()) e.phone = 'Ingresa un teléfono de contacto.';
-      else if (!phoneValid) e.phone = 'Número de teléfono no válido.';
+      // Teléfono opcional: solo valida formato si se escribió algo.
+      if (phone.number.trim() && !phoneValid) e.phone = 'Número de teléfono no válido.';
+      // Correo y contraseña son obligatorios: son las credenciales de la cuenta.
       if (!fields.email.trim()) e.email = 'Ingresa un correo de contacto.';
       else if (!isValidEmail(fields.email)) e.email = 'Correo no válido.';
       if (!fields.password) e.password = 'Crea una contraseña.';
@@ -203,7 +223,8 @@ export function CenterRegister() {
                 Solicitud enviada
               </h1>
               <p className="mt-2 max-w-sm font-body text-sm text-body">
-                Recibimos el registro de <strong className="text-ink">{fields.name}</strong>.
+                Recibimos el registro de{' '}
+                <strong className="text-ink">{fields.name || fields.organization}</strong>.
                 {needsEmailConfirm
                   ? ' Revisa tu correo para confirmar la cuenta; luego inicia sesión para completar el alta de tu centro.'
                   : ' Una organización autorizante revisará los datos y, al aprobarlos, tu centro aparecerá en el mapa público.'}
@@ -264,8 +285,7 @@ export function CenterRegister() {
                 {step === 0 && (
                   <>
                     <Input
-                      label="Nombre del centro"
-                      requiredMark
+                      label="Nombre del centro (opcional)"
                       placeholder="Liceo Andrés Bello"
                       leadingIcon={<Building2 className="h-4 w-4" aria-hidden />}
                       value={fields.name}
@@ -283,16 +303,24 @@ export function CenterRegister() {
                     />
                     <AddressInput
                       label="Dirección"
+                      requiredMark
                       placeholder="Av. Francisco de Miranda, Chacao, Caracas"
                       leadingIcon={<MapPin className="h-4 w-4" aria-hidden />}
                       value={fields.address}
                       onChange={(e) => set('address', e.target.value)}
+                      proximity={selectedCoords}
                       onSelect={handleAddressSelect}
                       error={errors.address}
                     />
-                    <ScheduleField
-                      label="Horario de recepción"
+                    <LocationField
                       required
+                      lat={selectedCoords?.lat ?? null}
+                      lng={selectedCoords?.lng ?? null}
+                      onChange={handleMapClick}
+                      error={errors.location}
+                    />
+                    <ScheduleField
+                      label="Horario de recepción (opcional)"
                       value={schedule}
                       onChange={setSchedule}
                       error={errors.schedule}
@@ -304,8 +332,7 @@ export function CenterRegister() {
                 {step === 1 && (
                   <>
                     <PhoneField
-                      label="Teléfono"
-                      required
+                      label="Teléfono (opcional)"
                       value={phone}
                       onChange={setPhone}
                       error={errors.phone}

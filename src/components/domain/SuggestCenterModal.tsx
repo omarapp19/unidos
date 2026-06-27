@@ -1,8 +1,5 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 import { Building2, AtSign, Globe, Mail } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import { suggestCenter } from '@/lib/api/centers';
 import { reverseGeocodeAddress } from '@/lib/geo';
 import {
@@ -22,7 +19,13 @@ import {
   AddressInput,
   Checkbox,
 } from '@/components/ui';
-import { PhoneField, ScheduleField, EMPTY_PHONE, type PhoneValue } from '@/components/form';
+import {
+  PhoneField,
+  ScheduleField,
+  LocationField,
+  EMPTY_PHONE,
+  type PhoneValue,
+} from '@/components/form';
 import {
   EMPTY_BLOCK,
   isScheduleValid,
@@ -62,43 +65,6 @@ const EMPTY_FORM: FormState = {
   lat: '',
   lng: '',
 };
-
-const pinIcon = L.divIcon({
-  className: '',
-  html: `<div style="
-    width: 30px; height: 30px;
-    background: var(--color-rojo);
-    border: 3px solid #fff; border-radius: 50% 50% 50% 0;
-    transform: rotate(-45deg);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-  "></div>`,
-  iconSize: [30, 30],
-  iconAnchor: [15, 30],
-});
-
-function LocationPickerMap({
-  lat,
-  lng,
-  onChange,
-}: {
-  lat: number;
-  lng: number;
-  onChange: (lat: number, lng: number) => void;
-}) {
-  const map = useMap();
-
-  useEffect(() => {
-    map.panTo([lat, lng]);
-  }, [lat, lng, map]);
-
-  useMapEvents({
-    click(e) {
-      onChange(e.latlng.lat, e.latlng.lng);
-    },
-  });
-
-  return <Marker position={[lat, lng]} icon={pinIcon} />;
-}
 
 export interface SuggestCenterModalProps {
   open: boolean;
@@ -142,10 +108,10 @@ export function SuggestCenterModal({ open, onClose }: SuggestCenterModalProps) {
 
   function validate(): Errors {
     const e: Errors = {};
-    if (!form.name.trim()) e.name = 'Ingresa el nombre del centro.';
+    // Solo obligatorios: organización, dirección y ubicación (mapa).
     if (!form.organization.trim()) e.organization = 'Indica la organización (ej: Cruz Roja, etc).';
     if (!form.address.trim()) e.address = 'Ingresa la dirección o selecciónala en el mapa.';
-    
+
     const scheduleTouched = schedule.some(
       (b) => b.days.length > 0 || b.open !== '' || b.close !== '',
     );
@@ -249,8 +215,7 @@ export function SuggestCenterModal({ open, onClose }: SuggestCenterModalProps) {
       ) : (
         <form onSubmit={onSubmit} className="flex flex-col gap-3" noValidate>
           <Input
-            label="Nombre del centro"
-            requiredMark
+            label="Nombre del centro (opcional)"
             placeholder="Liceo Andrés Bello"
             value={form.name}
             onChange={(e) => set('name', e.target.value)}
@@ -270,6 +235,7 @@ export function SuggestCenterModal({ open, onClose }: SuggestCenterModalProps) {
             placeholder="Escribe para buscar calle, sector o ciudad..."
             value={form.address}
             onChange={(e) => set('address', e.target.value)}
+            proximity={form.lat && form.lng ? { lat: parseFloat(form.lat), lng: parseFloat(form.lng) } : null}
             onSelect={(address, lat, lng) => {
               setForm((f) => ({
                 ...f,
@@ -281,35 +247,12 @@ export function SuggestCenterModal({ open, onClose }: SuggestCenterModalProps) {
             error={errors.address}
           />
 
-          <div className="flex flex-col gap-1.5">
-            <label className="font-body text-sm font-semibold text-ink">
-              Ubicación en el mapa *
-            </label>
-            <div className="h-44 w-full overflow-hidden rounded-xl border border-line z-0">
-              <MapContainer
-                center={[
-                  parseFloat(form.lat) || 10.4806,
-                  parseFloat(form.lng) || -66.9036
-                ]}
-                zoom={13}
-                scrollWheelZoom
-                style={{ height: '100%', width: '100%' }}
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                <LocationPickerMap
-                  lat={parseFloat(form.lat) || 10.4806}
-                  lng={parseFloat(form.lng) || -66.9036}
-                  onChange={handleMapClick}
-                />
-              </MapContainer>
-            </div>
-            <p className="font-body text-[11px] text-muted">
-              Haz clic en el mapa para situar exactamente el marcador de ubicación.
-            </p>
-          </div>
+          <LocationField
+            required
+            lat={form.lat ? parseFloat(form.lat) : null}
+            lng={form.lng ? parseFloat(form.lng) : null}
+            onChange={handleMapClick}
+          />
 
           <ScheduleField
             label="Horario de recepción (opcional)"
