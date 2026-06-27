@@ -56,173 +56,6 @@ function getSupplyIcon(name: string, sizeClass = 'h-4 w-4') {
   return <HeartPulse className={`${cls} text-success`} />;
 }
 
-interface SimulatedDonation {
-  id: string;
-  text: string;
-  categoryName: string;
-  categoryTheme: 'azul' | 'rojo' | 'amarillo' | 'success' | 'purple' | 'orange';
-  iconName: 'apple' | 'heart' | 'droplet' | 'water' | 'shirt' | 'wrench';
-  timestamp: string;
-}
-
-const DONATION_TEMPLATES = [
-  { text: 'caja de agua', categoryName: 'Agua e Hidratación', theme: 'success', icon: 'water', range: [1, 4] },
-  { text: 'botellas de agua', categoryName: 'Agua e Hidratación', theme: 'success', icon: 'water', range: [2, 12] },
-  { text: 'medicamentos en tabletas', categoryName: 'Medicinas e Insumos', theme: 'success', icon: 'water', range: [3, 8] },
-  { text: 'latas de atún', categoryName: 'Alimentos No Perecederos', theme: 'azul', icon: 'apple', range: [3, 10] },
-  { text: 'paquetes de pasta', categoryName: 'Alimentos No Perecederos', theme: 'azul', icon: 'apple', range: [2, 6] },
-  { text: 'kilos de arroz', categoryName: 'Alimentos No Perecederos', theme: 'azul', icon: 'apple', range: [1, 5] },
-  { text: 'Ampollas', categoryName: 'Medicina s e Insumos', theme: 'azul', icon: 'apple', range: [1, 3] },
-  { text: 'insumos medicos', categoryName: 'Medicinas e Insumos', theme: 'rojo', icon: 'heart', range: [1, 5] },
-  { text: 'vendas y gasas', categoryName: 'Medicinas e Insumos', theme: 'rojo', icon: 'heart', range: [4, 15] },
-  { text: 'frascos de alcohol', categoryName: 'Medicinas e Insumos', theme: 'rojo', icon: 'heart', range: [1, 4] },
-  { text: 'prendas de ropa', categoryName: 'Ropa, Calzado y Cobijo', theme: 'purple', icon: 'shirt', range: [2, 10] },
-  { text: 'cobijas y sabanas', categoryName: 'Ropa, Calzado y Cobijo', theme: 'purple', icon: 'shirt', range: [1, 4] },
-  { text: 'pares de zapatos', categoryName: 'Ropa, Calzado y Cobijo', theme: 'purple', icon: 'shirt', range: [1, 3] },
-  { text: 'Guantes de latex', categoryName: 'Medicinas e Insumos', theme: 'amarillo', icon: 'droplet', range: [3, 8] },
-  { text: 'cremas dentales', categoryName: 'Higiene Personal', theme: 'amarillo', icon: 'droplet', range: [2, 6] },
-  { text: 'paquetes de pañales', categoryName: 'Higiene Personal', theme: 'amarillo', icon: 'droplet', range: [1, 3] },
-  { text: 'linternas LED', categoryName: 'Herramientas y Logística', theme: 'orange', icon: 'wrench', range: [1, 3] },
-  { text: 'Herramientas', categoryName: 'Herramientas y Logística', theme: 'orange', icon: 'wrench', range: [2, 6] },
-  { text: 'guantes de trabajo', categoryName: 'Herramientas y Logística', theme: 'orange', icon: 'wrench', range: [1, 4] },
-];
-
-function getSimulatedIcon(iconName: string, className: string) {
-  switch (iconName) {
-    case 'apple': return <Apple className={className} />;
-    case 'heart': return <HeartPulse className={className} />;
-    case 'droplet': return <Droplet className={className} />;
-    case 'water': return <GlassWater className={className} />;
-    case 'shirt': return <Shirt className={className} />;
-    case 'wrench': return <Wrench className={className} />;
-    default: return <Apple className={className} />;
-  }
-}
-
-const THEME_STYLES = {
-  azul: { bg: 'bg-azul/10', text: 'text-azul-ink', border: 'border-azul/20' },
-  rojo: { bg: 'bg-rojo/10', text: 'text-rojo-ink', border: 'border-rojo/20' },
-  amarillo: { bg: 'bg-amarillo/10', text: 'text-amarillo-ink', border: 'border-amarillo/20' },
-  success: { bg: 'bg-success/10', text: 'text-success-ink', border: 'border-success/20' },
-  purple: { bg: 'bg-purple-500/10', text: 'text-purple-600', border: 'border-purple-500/20' },
-  orange: { bg: 'bg-orange-500/10', text: 'text-orange-600', border: 'border-orange-500/20' },
-};
-
-function DonationSimulator() {
-  const [donations, setDonations] = useState<SimulatedDonation[]>([]);
-
-  useEffect(() => {
-    // Generar las primeras 3 donaciones iniciales
-    const initialList: SimulatedDonation[] = [];
-    for (let i = 0; i < 3; i++) {
-      const template = DONATION_TEMPLATES[Math.floor(Math.random() * DONATION_TEMPLATES.length)];
-      if (!template) continue;
-      const [min, max] = template.range;
-      if (min === undefined || max === undefined) continue;
-      const quantity = Math.floor(Math.random() * (max - min + 1)) + min;
-      initialList.push({
-        id: `initial-${i}-${Math.random()}`,
-        text: `+${quantity} ${template.text}`,
-        categoryName: template.categoryName,
-        categoryTheme: template.theme as any,
-        iconName: template.icon as any,
-        timestamp: 'hace unos momentos',
-      });
-    }
-    setDonations(initialList);
-
-    const interval = setInterval(() => {
-      const template = DONATION_TEMPLATES[Math.floor(Math.random() * DONATION_TEMPLATES.length)];
-      if (!template) return;
-      const [min, max] = template.range;
-      if (min === undefined || max === undefined) return;
-      const quantity = Math.floor(Math.random() * (max - min + 1)) + min;
-      const newDonation: SimulatedDonation = {
-        id: `sim-${Date.now()}-${Math.random()}`,
-        text: `+${quantity} ${template.text}`,
-        categoryName: template.categoryName,
-        categoryTheme: template.theme as any,
-        iconName: template.icon as any,
-        timestamp: 'hace unos segundos',
-      };
-
-      setDonations((prev) => [newDonation, ...prev.slice(0, 2)]);
-    }, 2800);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div className="flex flex-col h-full rounded-xl border border-line-soft bg-surface-2/30 p-4">
-      <style>{`
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateY(-12px) scale(0.97);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        .animate-feed-item {
-          animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-      `}</style>
-
-      <div className="flex items-center justify-between border-b border-line-soft pb-2.5 mb-3">
-        <div className="flex items-center gap-1.5">
-          <Activity className="h-4 w-4 text-rojo animate-pulse" />
-          <span className="font-display text-2xs font-black uppercase tracking-wider text-ink">
-            Actividad Reciente (En Vivo)
-          </span>
-        </div>
-
-        <span className="inline-flex items-center gap-1 rounded-pill bg-success-bg px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-success-ink border border-success/15 select-none">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
-          </span>
-          En Vivo
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-2 min-h-[220px] justify-start">
-        {donations.map((item, idx) => {
-          const style = THEME_STYLES[item.categoryTheme];
-          return (
-            <div
-              key={item.id}
-              className={`animate-feed-item flex items-center justify-between p-3 rounded-lg border ${style.border} bg-surface transition-all duration-300 ${idx === 0 ? 'ring-1 ring-azul/10 shadow-xs' : 'opacity-60 scale-95 origin-top'
-                }`}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${style.bg} ${style.text} shrink-0`}>
-                  {getSimulatedIcon(item.iconName, 'h-4.5 w-4.5')}
-                </span>
-                <div className="min-w-0">
-                  <p className="font-display text-xs font-black tracking-tight text-ink">
-                    <span className={`${style.text} font-black mr-1`}>
-                      {item.text.split(' ')[0]}
-                    </span>
-                    {item.text.substring(item.text.indexOf(' ') + 1)}
-                  </p>
-                  <p className="font-body text-[10px] text-muted truncate">
-                    {item.categoryName}
-                  </p>
-                </div>
-              </div>
-
-              <span className="font-body text-[9px] text-subtle shrink-0 ml-2 select-none">
-                {idx === 0 ? 'hace un instante' : item.timestamp}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 export function PublicHome() {
   const { theme, toggleTheme } = useTheme();
@@ -666,14 +499,7 @@ export function PublicHome() {
                   </span>
                 </div>
 
-                {/* Indicador En Vivo */}
-                <span className="inline-flex items-center gap-1 rounded-pill bg-danger-bg px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-danger-ink border border-danger-bg/50 select-none">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-danger"></span>
-                  </span>
-                  En Vivo
-                </span>
+
               </div>
 
               <div className="flex flex-wrap gap-3 justify-center">
@@ -836,9 +662,35 @@ export function PublicHome() {
               </QueryBoundary>
             </div>
 
-            {/* Lado derecho: Simulador de Donaciones en Vivo */}
+            {/* Lado derecho: lo que la red ya recibe con más frecuencia (datos reales) */}
             <div className="w-full">
-              <DonationSimulator />
+              <div className="flex flex-col h-full rounded-xl border border-line-soft bg-surface-2/30 p-4">
+                <div className="flex items-center gap-1.5 border-b border-line-soft pb-2.5 mb-3">
+                  <BarChart3 className="h-4 w-4 text-success" />
+                  <span className="font-display text-2xs font-black uppercase tracking-wider text-ink">
+                    Lo que ya se recibe con frecuencia
+                  </span>
+                </div>
+                {publicTotals.length > 0 ? (
+                  <ul className="flex flex-col gap-2">
+                    {publicTotals.slice(0, 5).map((t, i) => (
+                      <li
+                        key={t.category.id}
+                        className="flex items-center gap-3 p-3 rounded-lg border border-line-soft bg-surface"
+                      >
+                        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-success/10 text-success-ink font-display text-xs font-black shrink-0">
+                          {i + 1}
+                        </span>
+                        <span className="font-display text-sm font-black tracking-tight text-ink">
+                          {t.category.name}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <EmptyState title="Aún no hay datos" description="Todavía no se han registrado donaciones." />
+                )}
+              </div>
             </div>
           </div>
         </Card>
