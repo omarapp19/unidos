@@ -64,8 +64,6 @@ export function Dashboard() {
     [donations, donationItems, centerId],
   );
 
-  const isSuperadmin = profile?.role === 'superadmin';
-
   // Identificados vs anónimos: acumulado de todas las donaciones del centro.
   const { identified, anonymous, pctIdentified } = useMemo(() => {
     const mine = donations.filter((d) => d.center_id === centerId);
@@ -177,15 +175,13 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {isSuperadmin && (
-        <SuperadminSuppliesManager />
-      )}
+      {centerId && <CenterSuppliesManager centerId={centerId} />}
       </QueryBoundary>
     </div>
   );
 }
 
-function SuperadminSuppliesManager() {
+function CenterSuppliesManager({ centerId }: { centerId: string }) {
   const [supplies, setSupplies] = useState<NeededSupply[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -195,7 +191,7 @@ function SuperadminSuppliesManager() {
   async function loadSupplies() {
     setLoading(true);
     try {
-      const data = await getNeededSupplies();
+      const data = await getNeededSupplies(centerId);
       setSupplies(data);
       setError(null);
     } catch (err: any) {
@@ -207,7 +203,7 @@ function SuperadminSuppliesManager() {
 
   useEffect(() => {
     loadSupplies();
-  }, []);
+  }, [centerId]);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -216,7 +212,7 @@ function SuperadminSuppliesManager() {
     setSubmitting(true);
     setError(null);
     try {
-      const added = await addNeededSupply(name);
+      const added = await addNeededSupply(name, centerId);
       setSupplies((prev) => [...prev, added]);
       setNewItem('');
     } catch (err: any) {
@@ -243,10 +239,10 @@ function SuperadminSuppliesManager() {
         <div>
           <h2 className="font-display text-h3 font-black tracking-snug text-ink flex items-center gap-2">
             <PlusCircle className="h-5 w-5 text-warning-ink" />
-            Administración de Insumos Críticos
+            Lo que tu centro necesita
           </h2>
           <p className="text-xs text-muted font-body mt-0.5">
-            Solo visible para usuarios Superadmin. Modifica el banner de insumos más necesitados de la landing pública.
+            Estos insumos aparecen en tu ficha pública para orientar a los donantes.
           </p>
         </div>
       </div>

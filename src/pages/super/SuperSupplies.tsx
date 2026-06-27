@@ -17,7 +17,7 @@ import { Button, Card, Modal, Input, QueryBoundary, EmptyState } from '@/compone
 
 export function SuperSupplies() {
   const supplies = useQuery(getNeededSupplies, []);
-  const create = useMutation(addNeededSupply);
+  const create = useMutation((name: string) => addNeededSupply(name, null));
   const update = useMutation((args: { id: string; name: string }) =>
     updateNeededSupply(args.id, args.name),
   );
