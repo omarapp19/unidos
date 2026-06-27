@@ -12,6 +12,7 @@ import { RequireRole } from '@/components/layout/RequireRole';
 import { SuperCenters } from '@/pages/super/SuperCenters';
 import { SuperCategories } from '@/pages/super/SuperCategories';
 import { SuperSupplies } from '@/pages/super/SuperSupplies';
+import { SuperHelpResources } from '@/pages/super/SuperHelpResources';
 
 /* ===========================================================================
    Rutas del MVP (PRD). Público sin login en `/`; panel privado bajo `/admin`.
@@ -45,6 +46,7 @@ export const router = createBrowserRouter([
       { path: 'centros', element: <SuperCenters /> },
       { path: 'categorias', element: <SuperCategories /> },
       { path: 'insumos', element: <SuperSupplies /> },
+      { path: 'recursos', element: <SuperHelpResources /> },
     ],
   },
   { path: '*', element: <Navigate to="/" replace /> },

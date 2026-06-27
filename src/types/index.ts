@@ -72,6 +72,24 @@ export interface Donation {
   created_by: string;
 }
 
+/** `help_categories` — categorías de recursos de ayuda humanitaria. */
+export interface HelpCategory {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+/** `help_links` — enlace de ayuda asociado a una categoría. */
+export interface HelpLink {
+  id: string;
+  category_id: string;
+  label: string;
+  description: string;
+  href: string;
+  sort_order: number;
+  created_at: string;
+}
+
 /** `donation_items` — productos de una donación. */
 export interface DonationItem {
   id: string;
