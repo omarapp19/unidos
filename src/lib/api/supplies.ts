@@ -70,3 +70,17 @@ export function deleteNeededSupply(id: string): Promise<void> {
     if (error) throw fromPostgrestError(error);
   });
 }
+
+/** Modifica un insumo del listado (requiere rol de superadmin). */
+export function updateNeededSupply(id: string, name: string): Promise<NeededSupply> {
+  return withRetry(async () => {
+    const { data, error } = await supabase
+      .from('needed_supplies')
+      .update({ name })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw fromPostgrestError(error);
+    return data;
+  });
+}

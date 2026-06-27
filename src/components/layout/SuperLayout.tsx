@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
-import { Building2, Tags, LogOut, Menu, X, Shield, Sun, Moon } from 'lucide-react';
+import { Building2, Tags, LogOut, Menu, X, Shield, Sun, Moon, Boxes } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -15,6 +15,7 @@ import { RoleBadge } from '@/components/ui/Badge';
 const NAV = [
   { to: '/admin/super/centros', label: 'Centros', icon: Building2 },
   { to: '/admin/super/categorias', label: 'Categorías', icon: Tags },
+  { to: '/admin/super/insumos', label: 'Insumos Críticos', icon: Boxes },
 ];
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {

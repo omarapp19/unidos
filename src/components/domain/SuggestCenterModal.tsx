@@ -169,7 +169,7 @@ export function SuggestCenterModal({ open, onClose }: SuggestCenterModalProps) {
       });
       setSuccess(true);
     } catch (err) {
-      setFormError('Hubo un problema al enviar la sugerencia. Intenta de nuevo.');
+      setFormError(err instanceof Error ? err.message : 'Hubo un problema al enviar la sugerencia. Intenta de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -192,8 +192,8 @@ export function SuggestCenterModal({ open, onClose }: SuggestCenterModalProps) {
     <Modal
       open={open}
       onClose={closeAndReset}
-      title="Sugerir centro de acopio"
-      subtitle="Envía la ubicación e información de un centro de acopio activo. No se hará público hasta que sea aprobado por el superadmin."
+      title="Agregar nuevo centro"
+      subtitle="Envía la ubicación e información de un centro de acopio activo."
     >
       {success ? (
         <div className="flex flex-col items-center py-6 text-center">
@@ -201,10 +201,10 @@ export function SuggestCenterModal({ open, onClose }: SuggestCenterModalProps) {
             <Building2 className="h-6 w-6" aria-hidden />
           </span>
           <h3 className="font-display text-h3 font-black tracking-snug text-ink">
-            ¡Sugerencia recibida!
+            ¡Registro recibido!
           </h3>
           <p className="mt-2 max-w-sm font-body text-sm text-body">
-            Gracias por cooperar. El centro de acopio ha sido registrado. Un superadmin revisará y aprobará los datos para que aparezca públicamente en el mapa.
+            Gracias por cooperar. El centro de acopio ha sido registrado.
           </p>
           <div className="mt-6 flex w-full justify-center">
             <Button variant="primary" onClick={closeAndReset}>
@@ -235,6 +235,7 @@ export function SuggestCenterModal({ open, onClose }: SuggestCenterModalProps) {
             placeholder="Escribe para buscar calle, sector o ciudad..."
             value={form.address}
             onChange={(e) => set('address', e.target.value)}
+            proximity={form.lat && form.lng ? { lat: parseFloat(form.lat), lng: parseFloat(form.lng) } : null}
             onSelect={(address, lat, lng) => {
               setForm((f) => ({
                 ...f,
@@ -308,7 +309,7 @@ export function SuggestCenterModal({ open, onClose }: SuggestCenterModalProps) {
               Cancelar
             </Button>
             <Button type="submit" loading={loading}>
-              Sugerir Centro
+              Agregar Centro
             </Button>
           </div>
         </form>

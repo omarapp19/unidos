@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, Stethoscope, TestTube, Pill, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus } from 'lucide-react';
+import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, Stethoscope, TestTube, Pill, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { nearest, sortByDistance, reverseGeocode, type LatLng, DEFAULT_LATLNG } from '@/lib/geo';
 import { categoryTotals } from '@/lib/stats';
@@ -245,6 +245,7 @@ export function PublicHome() {
   // Centro abierto en la ficha ampliada (contacto + redes). `null` = modal cerrado.
   const [detailCenter, setDetailCenter] = useState<Center | null>(null);
   const [suggestModalOpen, setSuggestModalOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Control para inicializar el centro más cercano una sola vez cuando
   // coincidan la disponibilidad de la ubicación y de los centros cargados.
@@ -424,19 +425,22 @@ export function PublicHome() {
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-line-soft bg-surface/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <Link to="/" className="flex items-center gap-2 min-w-0">
+          {/* Logo */}
+          <Link to="/" className="flex items-center gap-2 shrink-0">
             <span className="flex h-9 w-9 items-center justify-center rounded-md bg-rojo text-white shrink-0">
               <MapPin className="h-5 w-5" aria-hidden />
             </span>
             <span className="flex flex-col leading-none min-w-0">
               <span className="font-display text-h3 font-black tracking-snug text-ink">Unidos</span>
-              <span className="flex items-center gap-0.5 font-body text-2xs text-muted min-w-0">
+              <span className="hidden min-[360px]:flex items-center gap-0.5 font-body text-2xs text-muted min-w-0">
                 <MapPin className="h-3 w-3 shrink-0 text-rojo" aria-hidden />
-                <span className="truncate">{locationLabel}</span>
+                <span className="truncate max-w-[100px] sm:max-w-none">{locationLabel}</span>
               </span>
             </span>
           </Link>
-          <div className="flex items-center gap-2 shrink-0">
+
+          {/* Desktop Navigation */}
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
             <Button
               variant="ghost"
               size="sm"
@@ -452,19 +456,65 @@ export function PublicHome() {
               onClick={() => setSuggestModalOpen(true)}
               leftIcon={<Plus className="h-4 w-4" />}
             >
-              <span className="hidden sm:inline">Sugerir centro</span>
-              <span className="sm:hidden">Sugerir</span>
+              Agregar nuevo centro
             </Button>
             <Link
               to="/admin/login"
               className="inline-flex h-control-sm items-center justify-center gap-2 whitespace-nowrap rounded-pill bg-rojo px-4 font-display text-2xs font-black tracking-snug text-white transition hover:brightness-95 active:brightness-90"
             >
               <Building2 className="h-4 w-4" aria-hidden />
-              <span className="hidden sm:inline">¿Eres un centro?</span>
-              <span className="sm:hidden">Centro</span>
+              ¿Eres un centro?
             </Link>
           </div>
+
+          {/* Mobile Navigation Trigger */}
+          <div className="flex sm:hidden items-center gap-1.5 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleTheme}
+              aria-label="Cambiar tema"
+              leftIcon={theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              className="px-2.5"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Menu"
+              leftIcon={mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              className="px-2.5"
+            />
+          </div>
         </div>
+
+        {/* Mobile Dropdown Menu */}
+        {mobileMenuOpen && (
+          <div className="border-t border-line-soft bg-surface sm:hidden animate-[selectIn_150ms_ease-out]">
+            <div className="flex flex-col gap-2 p-4">
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setSuggestModalOpen(true);
+                }}
+                leftIcon={<Plus className="h-4 w-4" />}
+                fullWidth
+              >
+                Agregar nuevo centro
+              </Button>
+              <Link
+                to="/admin/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-pill bg-rojo px-5 font-display text-sm font-black tracking-snug text-white transition hover:brightness-95 active:brightness-90"
+              >
+                <Building2 className="h-4 w-4" aria-hidden />
+                ¿Eres un centro? (Área Administrativa)
+              </Link>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Título + buscador + Insumos */}

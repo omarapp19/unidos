@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -11,8 +11,8 @@ import { cn } from '@/lib/utils';
    Compartido por el registro de centro y el modal "Sugerir centro".
    ========================================================================== */
 
-/** Centro por defecto del mapa (Caracas) cuando aún no hay coords. */
-const DEFAULT_CENTER: [number, number] = [10.4806, -66.9036];
+/** Centro por defecto del mapa (Maracaibo) cuando aún no hay coords. */
+const MARACAIBO_CENTER: [number, number] = [10.6447, -71.6331];
 
 const pinIcon = L.divIcon({
   className: '',
@@ -30,10 +30,12 @@ const pinIcon = L.divIcon({
 function Picker({
   lat,
   lng,
+  hasMarker,
   onChange,
 }: {
   lat: number;
   lng: number;
+  hasMarker: boolean;
   onChange: (lat: number, lng: number) => void;
 }) {
   const map = useMap();
@@ -48,6 +50,7 @@ function Picker({
     },
   });
 
+  if (!hasMarker) return null;
   return <Marker position={[lat, lng]} icon={pinIcon} />;
 }
 
@@ -72,8 +75,33 @@ export function LocationField({
   error,
   required = false,
 }: LocationFieldProps) {
-  const markerLat = lat ?? DEFAULT_CENTER[0];
-  const markerLng = lng ?? DEFAULT_CENTER[1];
+  const [gpsCenter, setGpsCenter] = useState<[number, number] | null>(null);
+
+  // Intentar obtener la ubicación del usuario mediante GPS si ya está aprobada
+  useEffect(() => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.permissions && navigator.geolocation) {
+        navigator.permissions
+          .query({ name: 'geolocation' as PermissionName })
+          .then((result) => {
+            if (result.state === 'granted') {
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  setGpsCenter([pos.coords.latitude, pos.coords.longitude]);
+                },
+                undefined,
+                { enableHighAccuracy: false, timeout: 3000, maximumAge: 600000 }
+              );
+            }
+          })
+          .catch(() => {});
+      }
+    } catch (e) {}
+  }, []);
+
+  const hasMarker = lat !== null && lng !== null;
+  const markerLat = lat ?? gpsCenter?.[0] ?? MARACAIBO_CENTER[0];
+  const markerLng = lng ?? gpsCenter?.[1] ?? MARACAIBO_CENTER[1];
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -99,7 +127,7 @@ export function LocationField({
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <Picker lat={markerLat} lng={markerLng} onChange={onChange} />
+          <Picker lat={markerLat} lng={markerLng} hasMarker={hasMarker} onChange={onChange} />
         </MapContainer>
       </div>
       {error ? (

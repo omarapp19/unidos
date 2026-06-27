@@ -308,6 +308,7 @@ export function CenterRegister() {
                       leadingIcon={<MapPin className="h-4 w-4" aria-hidden />}
                       value={fields.address}
                       onChange={(e) => set('address', e.target.value)}
+                      proximity={selectedCoords}
                       onSelect={handleAddressSelect}
                       error={errors.address}
                     />
