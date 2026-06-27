@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, Stethoscope, TestTube, Pill, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X, Users, Link2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X, Users, Link2, ChevronDown, ChevronRight } from 'lucide-react';
+import { renderSupplyIcon } from '@/lib/supplyIcons';
 import { useTheme } from '@/lib/theme';
 import { nearest, sortByDistance, reverseGeocode, type LatLng, DEFAULT_LATLNG } from '@/lib/geo';
 import { categoryTotals } from '@/lib/stats';
@@ -53,20 +54,6 @@ const DEFAULT_LOCATION = 'Chacao, Caracas';
 
 type GeoState = 'idle' | 'loading' | 'granted' | 'denied';
 
-function getSupplyIcon(name: string, sizeClass = 'h-4 w-4') {
-  const n = name.toLowerCase();
-  const cls = `${sizeClass} shrink-0`;
-  if (n.includes('med') || n.includes('salud') || n.includes('sanit')) {
-    return <Stethoscope className={`${cls} text-rojo`} />;
-  }
-  if (n.includes('ampoll') || n.includes('inyect')) {
-    return <TestTube className={`${cls} text-azul`} />;
-  }
-  if (n.includes('tablet') || n.includes('pastill') || n.includes('pild') || n.includes('medicament')) {
-    return <Pill className={`${cls} text-amarillo`} />;
-  }
-  return <HeartPulse className={`${cls} text-success`} />;
-}
 
 
 export function PublicHome() {
@@ -542,7 +529,7 @@ export function PublicHome() {
 
                     {/* Icono más grande con fondo circular */}
                     <div className="flex items-center justify-center p-2 rounded-full bg-surface-2 shrink-0">
-                      {getSupplyIcon(item.name, 'h-5 w-5')}
+                      {renderSupplyIcon(item.icon, item.name, 'h-5 w-5')}
                     </div>
 
                     {/* Texto del insumo centrado abajo */}

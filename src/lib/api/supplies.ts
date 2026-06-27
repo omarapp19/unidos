@@ -11,6 +11,8 @@ export interface NeededSupply {
   id: string;
   name: string;
   center_id?: string | null;
+  /** Key del catálogo de iconos (src/lib/supplyIcons.tsx). NULL = inferir por nombre. */
+  icon?: string | null;
   created_at?: string;
 }
 
@@ -33,7 +35,7 @@ export function getNeededSupplies(centerId?: string | null): Promise<NeededSuppl
     try {
       let q = supabase
         .from('needed_supplies')
-        .select('id, name, center_id, created_at')
+        .select('id, name, center_id, icon, created_at')
         .order('created_at', { ascending: true });
       q = centerId == null ? q.is('center_id', null) : q.eq('center_id', centerId);
 
@@ -57,12 +59,16 @@ export function getNeededSupplies(centerId?: string | null): Promise<NeededSuppl
   });
 }
 
-/** Añade un nuevo insumo al listado (requiere rol de superadmin). */
-export function addNeededSupply(name: string, centerId?: string | null): Promise<NeededSupply> {
+/** Añade un nuevo insumo al listado (requiere rol de superadmin o admin del centro). */
+export function addNeededSupply(
+  name: string,
+  centerId?: string | null,
+  icon?: string | null,
+): Promise<NeededSupply> {
   return withRetry(async () => {
     const { data, error } = await supabase
       .from('needed_supplies')
-      .insert({ name, center_id: centerId ?? null })
+      .insert({ name, center_id: centerId ?? null, icon: icon ?? null })
       .select()
       .single();
     if (error) throw fromPostgrestError(error);
@@ -92,12 +98,18 @@ export function getCenterPublicSummary(centerId: string): Promise<CenterSupplyCa
   });
 }
 
-/** Modifica un insumo del listado (requiere rol de superadmin). */
-export function updateNeededSupply(id: string, name: string): Promise<NeededSupply> {
+/** Modifica un insumo del listado (requiere rol de superadmin o admin del centro). */
+export function updateNeededSupply(
+  id: string,
+  name: string,
+  icon?: string | null,
+): Promise<NeededSupply> {
   return withRetry(async () => {
+    const patch: { name: string; icon?: string | null } = { name };
+    if (icon !== undefined) patch.icon = icon;
     const { data, error } = await supabase
       .from('needed_supplies')
-      .update({ name })
+      .update(patch)
       .eq('id', id)
       .select()
       .single();
