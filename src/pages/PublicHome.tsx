@@ -21,7 +21,6 @@ import {
   SuggestCenterModal,
 } from '@/components/domain';
 import { CenterMap } from '@/components/map/CenterMap';
-import { cn } from '@/lib/utils';
 
 
 /* ===========================================================================
@@ -252,6 +251,7 @@ export function PublicHome() {
   const [suggestModalOpen, setSuggestModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
+  const [activeMobileTab, setActiveMobileTab] = useState<'centers' | 'info'>('centers');
 
   // Control para inicializar el centro más cercano una sola vez cuando
   // coincidan la disponibilidad de la ubicación y de los centros cargados.
