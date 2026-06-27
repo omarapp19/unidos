@@ -506,9 +506,9 @@ export function PublicHome() {
         </div>
 
         {/* Lado derecho: Insumos críticos más necesitados (arriba del mapa en desktop) */}
-        <div className="w-full flex flex-col items-center lg:items-center">
+        <div className="w-full flex flex-col items-center lg:items-end">
           {neededSupplies.length > 0 && (
-            <div className="flex flex-col gap-2.5 w-full items-center">
+            <div className="flex flex-col gap-2.5 w-full items-center lg:items-end">
               <div className="flex items-center justify-between w-full max-w-[312px]">
                 <div className="flex items-center gap-1.5">
                   <Activity className="h-4 w-4 text-rojo animate-pulse" />
@@ -518,7 +518,7 @@ export function PublicHome() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-3 justify-center">
+              <div className="flex flex-wrap gap-3 justify-center lg:justify-end">
                 {neededSupplies.map((item) => (
                   <div
                     key={item.id}
@@ -680,7 +680,7 @@ export function PublicHome() {
 
             {/* Lado derecho: lo que la red ya recibe con más frecuencia (datos reales) */}
             <div className="w-full">
-              <div className="flex flex-col h-full rounded-xl border border-line-soft bg-surface-2/30 p-4">
+              <div className="flex flex-col rounded-xl border border-line-soft bg-surface-2/30 p-4">
                 <div className="flex items-center gap-1.5 border-b border-line-soft pb-2.5 mb-3">
                   <BarChart3 className="h-4 w-4 text-success" />
                   <span className="font-display text-2xs font-black uppercase tracking-wider text-ink">
