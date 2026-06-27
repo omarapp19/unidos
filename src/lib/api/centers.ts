@@ -105,13 +105,32 @@ export interface CentersPage {
   total: number;
 }
 
-/** Página de aprobados [offset, offset+limit). `total` viene del count exacto. */
-export function getApprovedCentersPage(offset: number, limit: number): Promise<CentersPage> {
+/**
+ * Página de aprobados [offset, offset+limit). `total` viene del count exacto.
+ * Con `verifiedOnly`, filtra y cuenta solo los verificados. Con `search`,
+ * filtra por nombre/organización/dirección/correo (ilike, insensible a mayúsc.).
+ */
+export function getApprovedCentersPage(
+  offset: number,
+  limit: number,
+  verifiedOnly = false,
+  search = '',
+): Promise<CentersPage> {
   return withRetry(async () => {
-    const { data, error, count } = await supabase
+    let query = supabase
       .from('centers')
       .select(COLUMNS, { count: 'exact' })
-      .eq('is_approved', true)
+      .eq('is_approved', true);
+    if (verifiedOnly) query = query.eq('is_verified', true);
+    const term = search.trim();
+    if (term) {
+      // Escapa comas/paréntesis que rompen el parser del filtro `.or`.
+      const safe = term.replace(/[,()]/g, ' ');
+      query = query.or(
+        `name.ilike.%${safe}%,organization.ilike.%${safe}%,address.ilike.%${safe}%,email.ilike.%${safe}%`,
+      );
+    }
+    const { data, error, count } = await query
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
     if (error) throw fromPostgrestError(error);
