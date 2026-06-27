@@ -8,7 +8,7 @@ import { useQuery } from '@/lib/hooks/useQuery';
 import { getApprovedCenters } from '@/lib/api/centers';
 import { getCategories } from '@/lib/api/categories';
 import { getNetworkDonationItems } from '@/lib/api/donations';
-import { getNeededSupplies } from '@/lib/api/supplies';
+import { getNeededSupplies, getCenterPublicSummary } from '@/lib/api/supplies';
 import { getHelpCategories } from '@/lib/api/helpResources';
 import type { Center } from '@/types';
 import { cn } from '@/lib/utils';
@@ -81,6 +81,8 @@ export function PublicHome() {
   const [query, setQuery] = useState('');
   // Centro abierto en la ficha ampliada (contacto + redes). `null` = modal cerrado.
   const [detailCenter, setDetailCenter] = useState<Center | null>(null);
+  const [detailFalta, setDetailFalta] = useState<string[]>([]);
+  const [detailRecibe, setDetailRecibe] = useState<string[]>([]);
   const [suggestModalOpen, setSuggestModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
@@ -89,6 +91,19 @@ export function PublicHome() {
   // Control para inicializar el centro más cercano una sola vez cuando
   // coincidan la disponibilidad de la ubicación y de los centros cargados.
   const hasInitializedNearestRef = useRef(false);
+
+  // Carga bajo demanda: insumos faltantes y categorías recibidas del centro abierto en ficha.
+  useEffect(() => {
+    if (!detailCenter) { setDetailFalta([]); setDetailRecibe([]); return; }
+    let active = true;
+    getNeededSupplies(detailCenter.id)
+      .then((rows) => { if (active) setDetailFalta(rows.map((r) => r.name)); })
+      .catch(() => { if (active) setDetailFalta([]); });
+    getCenterPublicSummary(detailCenter.id)
+      .then((rows) => { if (active) setDetailRecibe(rows.map((r) => r.category_name)); })
+      .catch(() => { if (active) setDetailRecibe([]); });
+    return () => { active = false; };
+  }, [detailCenter]);
 
   // Sincronizar el centro más cercano una vez que se tiene la ubicación y los centros cargados.
   useEffect(() => {
@@ -1116,6 +1131,8 @@ export function PublicHome() {
         open={detailCenter !== null}
         onClose={() => setDetailCenter(null)}
         distanceKm={detailCenter ? kmById.get(detailCenter.id) ?? null : null}
+        urgentSupplies={detailFalta}
+        receivedCategories={detailRecibe}
       />
 
       <SuggestCenterModal
