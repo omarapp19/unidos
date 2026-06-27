@@ -3,18 +3,18 @@ import { ArrowLeft, ExternalLink, AlertCircle, Phone, Globe, FileText, Search, U
 
 const resources = [
   {
-    category: 'Registros Oficiales',
-    icon: FileText,
+    category: 'Plataformas ciudadanas – Terremoto 2026',
+    icon: Search,
     links: [
       {
-        label: 'CICR – Restoring Family Links',
-        description: 'Sistema internacional de la Cruz Roja para buscar personas separadas por conflictos o desastres.',
-        href: '#',
+        label: 'Desaparecidos Venezuela',
+        description: 'Plataforma ciudadana para reportar y buscar personas desaparecidas tras los terremotos del 24 de junio de 2026. Más de 40.000 reportes activos.',
+        href: 'https://www.desaparecidosvenezuela.com/',
       },
       {
-        label: 'ACNUR – Registro de Personas Desaparecidas',
-        description: 'Plataforma del Alto Comisionado de las Naciones Unidas para los Refugiados.',
-        href: '#',
+        label: 'CICR – Restoring Family Links (Cruz Roja Venezuela)',
+        description: 'Sistema internacional de la Cruz Roja para reencontrarse con familiares separados por el desastre.',
+        href: 'https://familylinks.icrc.org/organization/venezuelan-red-cross',
       },
     ],
   },
@@ -24,50 +24,45 @@ const resources = [
     links: [
       {
         label: 'Cruz Roja Venezolana',
-        description: 'Solicitar búsqueda de familiares a través de la Cruz Roja nacional.',
-        href: '#',
+        description: 'Asistencia y protección a personas afectadas por desastres. Canal oficial para solicitar búsqueda de familiares.',
+        href: 'https://cruzroja.ve/',
       },
       {
+        label: 'ACNUR Venezuela',
+        description: 'Canal de la Agencia de la ONU para Refugiados con información de emergencia y asistencia humanitaria.',
+        href: 'https://help.unhcr.org/venezuela/',
+      },
+    ],
+  },
+  {
+    category: 'Derechos Humanos y Registro',
+    icon: FileText,
+    links: [
+      {
         label: 'PROVEA – Derechos Humanos',
-        description: 'Organización venezolana con registro de casos de personas desaparecidas.',
-        href: '#',
+        description: 'Organización venezolana con seguimiento y registro de casos de personas desaparecidas.',
+        href: 'https://provea.org/',
       },
       {
         label: 'Foro Penal',
-        description: 'Registro de detenidos y desaparecidos en Venezuela.',
-        href: '#',
+        description: 'Registro de detenidos y desaparecidos en Venezuela. Asistencia legal gratuita a las personas afectadas.',
+        href: 'https://foropenal.com/',
       },
     ],
   },
   {
-    category: 'Líneas de Emergencia',
+    category: 'Datos Operacionales ONU',
     icon: Phone,
     links: [
       {
-        label: 'Línea de Emergencia Nacional',
-        description: 'Reportar personas desaparecidas ante las autoridades competentes.',
-        href: '#',
+        label: 'Situación Venezuela – Portal ACNUR',
+        description: 'Datos operacionales y canales de ayuda de la ONU para la emergencia en Venezuela.',
+        href: 'https://data.unhcr.org/en/situations/vensit',
       },
       {
-        label: 'Sistema de Alerta Temprana',
-        description: 'Activar alertas de búsqueda de personas en situación de emergencia.',
-        href: '#',
-      },
-    ],
-  },
-  {
-    category: 'Plataformas de Búsqueda',
-    icon: Search,
-    links: [
-      {
-        label: 'Red de Búsqueda Comunitaria',
-        description: 'Plataforma colaborativa para la búsqueda de personas en zonas afectadas.',
-        href: '#',
-      },
-      {
-        label: 'Registro de Damnificados',
-        description: 'Base de datos de personas afectadas registradas en albergues y centros de acopio.',
-        href: '#',
+        label: 'CICR en Venezuela',
+        description: 'Presencia y operaciones del Comité Internacional de la Cruz Roja en el país.',
+        href: 'https://www.icrc.org/en/where-we-work/venezuela',
       },
     ],
   },
