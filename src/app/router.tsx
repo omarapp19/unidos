@@ -4,6 +4,7 @@ import { PersonasDesaparecidas } from '@/pages/PersonasDesaparecidas';
 import { AyudaCategoria } from '@/pages/AyudaCategoria';
 import { AdminLogin } from '@/pages/AdminLogin';
 import { CenterRegister } from '@/pages/CenterRegister';
+import { AcceptInvitation } from '@/pages/AcceptInvitation';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Dashboard } from '@/pages/admin/Dashboard';
 import { Donaciones } from '@/pages/admin/Donaciones';
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
   { path: '/ayuda/:categoryId', element: <AyudaCategoria /> },
   { path: '/admin/login', element: <AdminLogin /> },
   { path: '/registro', element: <CenterRegister /> },
+  { path: '/admin/aceptar-invitacion', element: <AcceptInvitation /> },
   {
     path: '/admin',
     element: <AdminLayout />,

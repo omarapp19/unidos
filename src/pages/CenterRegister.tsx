@@ -25,6 +25,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useMutation } from '@/lib/hooks/useMutation';
 import { registerCenter } from '@/lib/api/auth';
+import { ClaimCenterFlow } from '@/pages/ClaimCenterFlow';
 import { DEFAULT_LATLNG, reverseGeocodeAddress, type LatLng } from '@/lib/geo';
 import { EMPTY_BLOCK, isScheduleValid, serializeSchedule, type ScheduleBlock } from '@/lib/schedule';
 import {
@@ -77,6 +78,8 @@ const LAST_STEP = STEPS.length - 1;
 
 export function CenterRegister() {
   const navigate = useNavigate();
+  // 'new' = alta de un centro nuevo; 'claim' = reclamar uno existente sin admin.
+  const [mode, setMode] = useState<'new' | 'claim'>('new');
   const [step, setStep] = useState(0);
   const [fields, setFields] = useState<Fields>(EMPTY);
   const [phone, setPhone] = useState<PhoneValue>(EMPTY_PHONE);
@@ -249,10 +252,33 @@ export function CenterRegister() {
                   height={80}
                 />
                 <h1 className="font-display text-h2 font-black tracking-snug text-ink">
-                  Registra tu centro de acopio
+                  {mode === 'new' ? 'Registra tu centro de acopio' : 'Reclama tu centro'}
                 </h1>
               </div>
 
+              {/* Selector de modo: registrar nuevo o reclamar existente */}
+              <div className="mb-5 grid grid-cols-2 gap-1.5 rounded-lg bg-surface-2 p-1">
+                {(['new', 'claim'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMode(m)}
+                    className={cn(
+                      'rounded-md px-3 py-2 font-body text-sm font-bold transition',
+                      mode === m
+                        ? 'bg-surface text-azul-ink shadow-sm'
+                        : 'text-muted hover:text-ink',
+                    )}
+                  >
+                    {m === 'new' ? 'Registrar centro nuevo' : 'Reclamar uno existente'}
+                  </button>
+                ))}
+              </div>
+
+              {mode === 'claim' ? (
+                <ClaimCenterFlow />
+              ) : (
+              <>
               {/* Indicador de pasos */}
               <div className="mb-5">
                 <div className="flex items-center justify-between">
@@ -470,6 +496,8 @@ export function CenterRegister() {
                   )}
                 </div>
               </form>
+              </>
+              )}
 
               <p className="mt-5 text-center font-body text-xs text-muted">
                 ¿Ya tienes cuenta?{' '}

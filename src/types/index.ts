@@ -50,6 +50,37 @@ export interface Profile {
   full_name: string;
 }
 
+/** Centro huérfano (aprobado, sin admin) candidato a reclamo. */
+export interface OrphanCenter {
+  id: string;
+  name: string;
+  organization: string;
+  address: string;
+}
+
+/** `center_claims` — solicitud de un usuario para administrar un centro. */
+export interface CenterClaim {
+  id: string;
+  center_id: string;
+  center_name: string;
+  center_organization: string;
+  center_address: string;
+  user_id: string;
+  claimant_email: string;
+  full_name: string;
+  claimant_role: string | null;
+  evidence: string | null;
+  contact_phone: string | null;
+  created_at: string;
+}
+
+/** Estado del administrador de un centro (vista del superadmin). */
+export interface CenterAdminStatus {
+  has_admin: boolean;
+  admin_email: string | null;
+  pending_invitation_email: string | null;
+}
+
 /** `categories` — catálogo controlado de insumos. */
 export interface Category {
   id: string;
