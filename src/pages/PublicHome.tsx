@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X, Users, Link2, ChevronDown, ChevronRight } from 'lucide-react';
+import { RefreshCw, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X, Users, Link2, ChevronDown, ChevronRight } from 'lucide-react';
 import { renderSupplyIcon } from '@/lib/supplyIcons';
 import { useTheme } from '@/lib/theme';
 import { nearest, sortByDistance, reverseGeocode, type LatLng, DEFAULT_LATLNG } from '@/lib/geo';
@@ -640,9 +640,9 @@ export function PublicHome() {
               loading={geoState === 'loading'}
               aria-label={userPos ? 'Actualizar ubicación' : 'Usar mi ubicación'}
               title={userPos ? 'Actualizar ubicación' : 'Usar mi ubicación'}
-              className="shrink-0 px-3"
+              className="aspect-square shrink-0 rounded-full !px-0"
             >
-              {geoState !== 'loading' && <Navigation className="h-4 w-4" />}
+              {geoState !== 'loading' && <RefreshCw className="h-4 w-4" />}
             </Button>
             <Input
               label="Buscar centro o zona"
