@@ -103,6 +103,14 @@ export function AdminLogin() {
               onChange={(e) => setPassword(e.target.value)}
               error={error ?? undefined}
             />
+            <div className="-mt-1 text-right">
+              <Link
+                to="/admin/recuperar"
+                className="font-body text-sm font-semibold text-azul hover:text-ink"
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
             <Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>
               Iniciar sesión
             </Button>
