@@ -754,19 +754,27 @@ export function PublicHome() {
                       </button>
                     );
                   })}
+                  {/* Desplegado: "Ver menos" al final de la lista (dentro del flujo). */}
+                  {showAllSupplies && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllSupplies(false)}
+                      aria-expanded
+                      className="inline-flex shrink-0 items-center gap-1 rounded-pill border border-line-soft bg-surface-2 px-3 py-1.5 font-body text-xs font-bold text-muted transition hover:border-azul/40 hover:text-azul"
+                    >
+                      Ver menos
+                    </button>
+                  )}
                 </div>
-                {(hiddenSupplyCount > 0 || showAllSupplies) && (
+                {/* Colapsado: "+N" a la derecha de la fila única. */}
+                {!showAllSupplies && hiddenSupplyCount > 0 && (
                   <button
                     type="button"
-                    onClick={() => setShowAllSupplies((v) => !v)}
-                    aria-expanded={showAllSupplies}
+                    onClick={() => setShowAllSupplies(true)}
+                    aria-expanded={false}
                     className="inline-flex shrink-0 items-center gap-1 rounded-pill border border-line-soft bg-surface-2 px-3 py-1.5 font-body text-xs font-bold text-muted transition hover:border-azul/40 hover:text-azul"
                   >
-                    {showAllSupplies ? (
-                      <>Ver menos</>
-                    ) : (
-                      <>+{hiddenSupplyCount}</>
-                    )}
+                    +{hiddenSupplyCount}
                   </button>
                 )}
               </div>
