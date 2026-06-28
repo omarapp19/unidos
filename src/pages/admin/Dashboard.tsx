@@ -15,6 +15,7 @@ import { Button, Card, QueryBoundary } from '@/components/ui';
 import { CenterStatusBadge } from '@/components/ui/Badge';
 import { StatWidget, Donut } from '@/components/domain';
 import { getNeededSupplies, addNeededSupply, deleteNeededSupply, type NeededSupply } from '@/lib/api/supplies';
+import { renderSupplyIcon, SupplyIconPicker } from '@/lib/supplyIcons';
 
 /** Colores de marca para las mini barras del mosaico. */
 const BAR_FILL = ['bg-azul', 'bg-amarillo', 'bg-rojo', 'bg-success'] as const;
@@ -63,8 +64,6 @@ export function Dashboard() {
     () => totalQuantityForCenter(donations, donationItems, centerId),
     [donations, donationItems, centerId],
   );
-
-  const isSuperadmin = profile?.role === 'superadmin';
 
   // Identificados vs anónimos: acumulado de todas las donaciones del centro.
   const { identified, anonymous, pctIdentified } = useMemo(() => {
@@ -177,25 +176,24 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {isSuperadmin && (
-        <SuperadminSuppliesManager />
-      )}
+      {centerId && <CenterSuppliesManager centerId={centerId} />}
       </QueryBoundary>
     </div>
   );
 }
 
-function SuperadminSuppliesManager() {
+function CenterSuppliesManager({ centerId }: { centerId: string }) {
   const [supplies, setSupplies] = useState<NeededSupply[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newItem, setNewItem] = useState('');
+  const [newIcon, setNewIcon] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function loadSupplies() {
     setLoading(true);
     try {
-      const data = await getNeededSupplies();
+      const data = await getNeededSupplies(centerId);
       setSupplies(data);
       setError(null);
     } catch (err: any) {
@@ -207,7 +205,7 @@ function SuperadminSuppliesManager() {
 
   useEffect(() => {
     loadSupplies();
-  }, []);
+  }, [centerId]);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -216,9 +214,10 @@ function SuperadminSuppliesManager() {
     setSubmitting(true);
     setError(null);
     try {
-      const added = await addNeededSupply(name);
+      const added = await addNeededSupply(name, centerId, newIcon);
       setSupplies((prev) => [...prev, added]);
       setNewItem('');
+      setNewIcon(null);
     } catch (err: any) {
       setError(err?.message ?? 'Error al guardar el insumo.');
     } finally {
@@ -243,10 +242,10 @@ function SuperadminSuppliesManager() {
         <div>
           <h2 className="font-display text-h3 font-black tracking-snug text-ink flex items-center gap-2">
             <PlusCircle className="h-5 w-5 text-warning-ink" />
-            Administración de Insumos Críticos
+            Lo que tu centro necesita
           </h2>
           <p className="text-xs text-muted font-body mt-0.5">
-            Solo visible para usuarios Superadmin. Modifica el banner de insumos más necesitados de la landing pública.
+            Estos insumos aparecen en tu ficha pública para orientar a los donantes.
           </p>
         </div>
       </div>
@@ -258,24 +257,27 @@ function SuperadminSuppliesManager() {
         </div>
       )}
 
-      <form onSubmit={handleAdd} className="flex gap-2">
-        <input
-          type="text"
-          placeholder="Ej: Insumos médicos, Ampollas, Tabletas..."
-          value={newItem}
-          onChange={(e) => setNewItem(e.target.value)}
-          className="flex-1 rounded-pill border border-line bg-surface px-4 py-2 text-xs font-body text-ink placeholder:text-muted focus:border-azul focus:outline-none"
-          disabled={submitting}
-        />
-        <Button
-          type="submit"
-          variant="primary"
-          size="sm"
-          loading={submitting}
-          className="whitespace-nowrap"
-        >
-          Agregar
-        </Button>
+      <form onSubmit={handleAdd} className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Ej: Insumos médicos, Ampollas, Tabletas..."
+            value={newItem}
+            onChange={(e) => setNewItem(e.target.value)}
+            className="flex-1 rounded-pill border border-line bg-surface px-4 py-2 text-xs font-body text-ink placeholder:text-muted focus:border-azul focus:outline-none"
+            disabled={submitting}
+          />
+          <Button
+            type="submit"
+            variant="primary"
+            size="sm"
+            loading={submitting}
+            className="whitespace-nowrap"
+          >
+            Agregar
+          </Button>
+        </div>
+        <SupplyIconPicker value={newIcon} onChange={setNewIcon} disabled={submitting} />
       </form>
 
       {loading ? (
@@ -287,6 +289,7 @@ function SuperadminSuppliesManager() {
               key={item.id}
               className="inline-flex items-center gap-1.5 rounded-pill bg-warning-bg px-3 py-1 font-body text-2xs font-bold text-warning-ink"
             >
+              {renderSupplyIcon(item.icon, item.name, 'h-3.5 w-3.5')}
               {item.name}
               <button
                 type="button"
