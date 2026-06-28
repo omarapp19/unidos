@@ -1,9 +1,11 @@
 -- ===========================================================================
 -- Estado/País por centro (filtro público estado/país).
---  · centers gana columnas `state` (estado/provincia) y `country` (default VE).
---  · Backfill: `state` = último segmento de `address` (las direcciones sembradas
---    terminan en ", <Estado>"); `country` queda 'Venezuela' (toda la semilla es VE).
---  · Editable luego desde el panel de superadmin para corregir los imperfectos.
+--  · centers gana columnas `state` (entidad federal / estado) y `country`
+--    (default 'Venezuela').
+--  · Backfill ESTRICTO desde el último segmento de `address`: solo se asigna
+--    cuando coincide exactamente con un país conocido o con una entidad federal
+--    de Venezuela (lista oficial). Si no coincide, se deja NULL — no se adivina.
+--  · Editable luego desde el panel de superadmin.
 -- ===========================================================================
 
 -- 1. Columnas nuevas ---------------------------------------------------------
@@ -11,30 +13,47 @@ ALTER TABLE "public"."centers"
   ADD COLUMN IF NOT EXISTS "state"   "text",
   ADD COLUMN IF NOT EXISTS "country" "text" NOT NULL DEFAULT 'Venezuela';
 
--- 2. Backfill del estado desde la dirección (solo filas sin estado y con coma).
---    split_part con índice negativo (-1) toma el último segmento (PG14+).
-UPDATE "public"."centers"
-SET "state" = NULLIF(trim(split_part("address", ',', -1)), '')
-WHERE "state" IS NULL
-  AND position(',' IN "address") > 0;
+-- 2. País: último segmento == nombre de país conocido (centros internacionales).
+UPDATE "public"."centers" c
+SET "country" = m.canonical, "state" = NULL
+FROM (VALUES
+  ('argentina','Argentina'),('brasil','Brasil'),('chile','Chile'),
+  ('colombia','Colombia'),('ecuador','Ecuador'),('españa','España'),
+  ('estados unidos','Estados Unidos'),('guatemala','Guatemala'),
+  ('méxico','México'),('mexico','México'),('panamá','Panamá'),('panama','Panamá'),
+  ('paraguay','Paraguay'),('perú','Perú'),('peru','Perú'),('portugal','Portugal'),
+  ('república dominicana','República Dominicana'),('republica dominicana','República Dominicana'),
+  ('uruguay','Uruguay'),('venezuela','Venezuela')
+) AS m(alias, canonical)
+WHERE position(',' IN c."address") > 0
+  AND lower(trim(split_part(c."address", ',', -1))) = m.alias;
 
--- 2b. Normaliza países: los centros internacionales traían el país como último
---     segmento, por lo que cayó en `state`. Lo movemos a `country` y dejamos
---     `state` en NULL (no tenemos su región subnacional de forma fiable).
-UPDATE "public"."centers"
-SET "country" = "state",
-    "state"   = NULL
-WHERE "state" IN (
-  'Argentina','Brasil','Chile','Colombia','Ecuador','España','Estados Unidos',
-  'Guatemala','México','Panamá','Paraguay','Perú','Portugal',
-  'República Dominicana','Uruguay'
-);
+-- 3. Estado: último segmento == entidad federal de Venezuela (coincidencia exacta;
+--    se aceptan variantes sin acento y abreviaturas usuales). Solo sobre centros VE.
+UPDATE "public"."centers" c
+SET "state" = m.canonical
+FROM (VALUES
+  ('amazonas','Amazonas'),
+  ('anzoátegui','Anzoátegui'),('anzoategui','Anzoátegui'),
+  ('apure','Apure'),('aragua','Aragua'),('barinas','Barinas'),
+  ('bolívar','Bolívar'),('bolivar','Bolívar'),
+  ('carabobo','Carabobo'),('cojedes','Cojedes'),
+  ('delta amacuro','Delta Amacuro'),
+  ('distrito capital','Distrito Capital'),('dtto capital','Distrito Capital'),
+  ('distrito federal','Distrito Capital'),('caracas','Distrito Capital'),
+  ('falcón','Falcón'),('falcon','Falcón'),
+  ('guárico','Guárico'),('guarico','Guárico'),
+  ('la guaira','La Guaira'),('vargas','La Guaira'),
+  ('lara','Lara'),('mérida','Mérida'),('merida','Mérida'),
+  ('miranda','Miranda'),('monagas','Monagas'),
+  ('nueva esparta','Nueva Esparta'),('portuguesa','Portuguesa'),
+  ('sucre','Sucre'),('táchira','Táchira'),('tachira','Táchira'),
+  ('trujillo','Trujillo'),('yaracuy','Yaracuy'),('zulia','Zulia')
+) AS m(alias, canonical)
+WHERE c."country" = 'Venezuela'
+  AND position(',' IN c."address") > 0
+  AND lower(trim(split_part(c."address", ',', -1))) = m.alias;
 
--- 2c. Filas cuyo último segmento era 'Venezuela' (país, no estado).
-UPDATE "public"."centers"
-SET "state" = NULL
-WHERE "state" = 'Venezuela';
-
--- 3. Índice para los filtros país/estado de la vista pública -----------------
+-- 4. Índice para los filtros país/estado de la vista pública -----------------
 CREATE INDEX IF NOT EXISTS "centers_country_state_idx"
   ON "public"."centers" ("country", "state");

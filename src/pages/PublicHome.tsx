@@ -556,32 +556,6 @@ export function PublicHome() {
           <h1 className="mt-1 font-display text-h1 font-black tracking-tightest text-ink">
             Centros cerca de ti
           </h1>
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <Input
-              label="Buscar centro o zona"
-              hideLabel
-              placeholder="Buscar centro o zona…"
-              leadingIcon={<Search className="h-4 w-4" aria-hidden />}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="sm:flex-1"
-            />
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={locateMe}
-              loading={geoState === 'loading'}
-              leftIcon={geoState !== 'loading' ? <Navigation className="h-4 w-4" /> : undefined}
-            >
-              {userPos ? 'Actualizar ubicación' : 'Mi ubicación'}
-            </Button>
-          </div>
-          {geoState === 'denied' && (
-            <p className="mt-2 font-body text-xs text-danger-ink">
-              {geoError ?? 'No pudimos obtener tu ubicación.'} Puedes explorar la lista y el mapa
-              libremente.
-            </p>
-          )}
         </div>
 
         {/* Lado derecho: Insumos críticos más necesitados (arriba del mapa en desktop) */}
@@ -651,68 +625,107 @@ export function PublicHome() {
         </div>
       </div>
 
-      {/* Filtros: país/estado + insumos urgentes (afectan lista y mapa) */}
+      {/* Buscador + filtros país/estado + insumos urgentes (afectan lista y mapa) */}
       <section className={cn(
         "mx-auto mt-4 w-full max-w-6xl px-4",
         activeMobileTab !== 'centers' && "hidden lg:block"
       )}>
-        <div className="flex flex-col gap-3 rounded-xl border border-line-soft bg-surface p-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="sm:w-52">
-              <Select
-                label="País"
-                options={countryOptions}
-                value={selectedCountry}
-                onChange={(v) => { setSelectedCountry(v); setSelectedState(''); }}
-              />
-            </div>
-            <div className="sm:w-52">
+        <div className="flex flex-col gap-2.5">
+          {/* Fila única: ubicación · buscador · estado · país */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={locateMe}
+              loading={geoState === 'loading'}
+              aria-label={userPos ? 'Actualizar ubicación' : 'Usar mi ubicación'}
+              title={userPos ? 'Actualizar ubicación' : 'Usar mi ubicación'}
+              className="shrink-0 px-3"
+            >
+              {geoState !== 'loading' && <Navigation className="h-4 w-4" />}
+            </Button>
+            <Input
+              label="Buscar centro o zona"
+              hideLabel
+              placeholder="Buscar centro o zona…"
+              leadingIcon={<Search className="h-4 w-4" aria-hidden />}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="sm:flex-1"
+            />
+            <div className="shrink-0 sm:w-44">
               <Select
                 label="Estado"
+                hideLabel
                 options={stateOptions}
                 value={selectedState}
                 onChange={setSelectedState}
               />
             </div>
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearFilters}
-                leftIcon={<X className="h-4 w-4" />}
-              >
-                Limpiar filtros
-              </Button>
-            )}
+            <div className="shrink-0 sm:w-44">
+              <Select
+                label="País"
+                hideLabel
+                options={countryOptions}
+                value={selectedCountry}
+                onChange={(v) => { setSelectedCountry(v); setSelectedState(''); }}
+              />
+            </div>
           </div>
 
-          {supplyNames.length > 0 && (
-            <div className="flex flex-col gap-1.5 border-t border-line-soft pt-3">
-              <span className="font-display text-[10px] font-black uppercase tracking-wider text-muted">
-                Filtrar por insumo urgente
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {supplyNames.map((name) => {
-                  const active = selectedSupplies.includes(name);
-                  return (
-                    <button
-                      key={name}
-                      type="button"
-                      onClick={() => toggleSupply(name)}
-                      aria-pressed={active}
-                      className={cn(
-                        "inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 font-body text-xs font-bold transition",
-                        active
-                          ? "border-rojo bg-rojo/10 text-rojo"
-                          : "border-line-soft bg-surface-2 text-body hover:border-rojo/40 hover:text-rojo"
-                      )}
-                    >
-                      {renderSupplyIcon(null, name, 'h-3.5 w-3.5')}
-                      {name}
-                    </button>
-                  );
-                })}
+          {geoState === 'denied' && (
+            <p className="font-body text-xs text-danger-ink">
+              {geoError ?? 'No pudimos obtener tu ubicación.'} Puedes explorar la lista y el mapa
+              libremente.
+            </p>
+          )}
+
+          {/* Insumos urgentes (chips) + limpiar filtros */}
+          {(supplyNames.length > 0 || hasActiveFilters) && (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-2">
+                {supplyNames.length > 0 ? (
+                  <span className="font-display text-[10px] font-black uppercase tracking-wider text-muted">
+                    Filtrar por insumo urgente
+                  </span>
+                ) : (
+                  <span />
+                )}
+                {hasActiveFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                    leftIcon={<X className="h-4 w-4" />}
+                  >
+                    Limpiar filtros
+                  </Button>
+                )}
               </div>
+              {supplyNames.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {supplyNames.map((name) => {
+                    const active = selectedSupplies.includes(name);
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => toggleSupply(name)}
+                        aria-pressed={active}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 font-body text-xs font-bold transition",
+                          active
+                            ? "border-rojo bg-rojo/10 text-rojo"
+                            : "border-line-soft bg-surface-2 text-body hover:border-rojo/40 hover:text-rojo"
+                        )}
+                      >
+                        {renderSupplyIcon(null, name, 'h-3.5 w-3.5')}
+                        {name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
