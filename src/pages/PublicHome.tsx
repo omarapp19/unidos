@@ -671,6 +671,17 @@ export function PublicHome() {
                 onChange={(v) => { setSelectedCountry(v); setSelectedState(''); }}
               />
             </div>
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="lg"
+                onClick={clearFilters}
+                leftIcon={<X className="h-4 w-4" />}
+                className="shrink-0"
+              >
+                Limpiar filtros
+              </Button>
+            )}
           </div>
 
           {geoState === 'denied' && (
@@ -680,31 +691,14 @@ export function PublicHome() {
             </p>
           )}
 
-          {/* Insumos urgentes (chips) + limpiar filtros */}
-          {(supplyNames.length > 0 || hasActiveFilters) && (
+          {/* Insumos urgentes (chips) */}
+          {supplyNames.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-2">
-                {supplyNames.length > 0 ? (
-                  <span className="font-display text-[10px] font-black uppercase tracking-wider text-muted">
-                    Filtrar por insumo urgente
-                  </span>
-                ) : (
-                  <span />
-                )}
-                {hasActiveFilters && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearFilters}
-                    leftIcon={<X className="h-4 w-4" />}
-                  >
-                    Limpiar filtros
-                  </Button>
-                )}
-              </div>
-              {supplyNames.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {supplyNames.map((name) => {
+              <span className="font-display text-[10px] font-black uppercase tracking-wider text-muted">
+                Filtrar por insumo urgente
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {supplyNames.map((name) => {
                     const active = selectedSupplies.includes(name);
                     return (
                       <button
@@ -725,7 +719,6 @@ export function PublicHome() {
                     );
                   })}
                 </div>
-              )}
             </div>
           )}
         </div>
