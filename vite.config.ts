@@ -12,4 +12,22 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  build: {
+    target: 'es2020',
+    cssCodeSplit: true,
+    // Separar dependencias estables en chunks cacheables a largo plazo. Así el
+    // navegador no re-descarga React/Supabase cuando solo cambia el código app.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          supabase: ['@supabase/supabase-js'],
+          // Leaflet queda fuera del bundle inicial (se carga con el mapa), pero
+          // agrupado para compartir caché entre home y registro.
+          leaflet: ['leaflet', 'react-leaflet'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 700,
+  },
 });
