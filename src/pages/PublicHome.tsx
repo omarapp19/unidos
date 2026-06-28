@@ -9,11 +9,11 @@ import { useQuery } from '@/lib/hooks/useQuery';
 import { getApprovedCenters } from '@/lib/api/centers';
 import { getCategories } from '@/lib/api/categories';
 import { getNetworkDonationItems } from '@/lib/api/donations';
-import { getNeededSupplies, getCenterPublicSummary } from '@/lib/api/supplies';
+import { getNeededSupplies, getCenterPublicSummary, getCentersNeededSupplies } from '@/lib/api/supplies';
 import { getHelpCategories } from '@/lib/api/helpResources';
 import type { Center } from '@/types';
 import { cn } from '@/lib/utils';
-import { Button, Card, Badge, Input, EmptyState, Spinner, QueryBoundary } from '@/components/ui';
+import { Button, Card, Badge, Input, Select, EmptyState, Spinner, QueryBoundary } from '@/components/ui';
 import {
   CenterCard,
   CenterDetailModal,
@@ -66,10 +66,13 @@ export function PublicHome() {
   const itemsQuery = useQuery(getNetworkDonationItems, []);
   const suppliesQuery = useQuery(getNeededSupplies, []);
   const helpCatsQuery = useQuery(getHelpCategories, []);
+  // Insumos urgentes por centro (para el filtro del mapa por insumos).
+  const centerSuppliesQuery = useQuery(getCentersNeededSupplies, []);
   const approvedCenters = centersQuery.data ?? [];
   const categories = categoriesQuery.data ?? [];
   const donationItems = itemsQuery.data ?? [];
   const neededSupplies = suppliesQuery.data ?? [];
+  const centerSupplies = centerSuppliesQuery.data ?? [];
   const [userPos, setUserPos] = useState<LatLng | null>(null);
   const [geoState, setGeoState] = useState<GeoState>('idle');
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -79,6 +82,10 @@ export function PublicHome() {
   const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
   const [flyTo, setFlyTo] = useState<LatLng | null>(null);
   const [query, setQuery] = useState('');
+  // Filtros geográficos (país/estado) y por insumo urgente. '' = sin filtro.
+  const [selectedCountry, setSelectedCountry] = useState('');
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedSupplies, setSelectedSupplies] = useState<string[]>([]);
   // Centro abierto en la ficha ampliada (contacto + redes). `null` = modal cerrado.
   const [detailCenter, setDetailCenter] = useState<Center | null>(null);
   const [detailFalta, setDetailFalta] = useState<string[]>([]);
@@ -133,18 +140,89 @@ export function PublicHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Centros ordenados por cercanía (si hay ubicación) y filtrados por búsqueda.
+  // Conjunto de ids aprobados, para descartar insumos de centros no públicos.
+  const approvedIds = useMemo(
+    () => new Set(approvedCenters.map((c) => c.id)),
+    [approvedCenters],
+  );
+
+  // Mapa centro→insumos urgentes (solo centros aprobados) para el filtro por insumo.
+  const supplyByCenter = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const s of centerSupplies) {
+      if (!approvedIds.has(s.center_id)) continue;
+      let set = m.get(s.center_id);
+      if (!set) {
+        set = new Set();
+        m.set(s.center_id, set);
+      }
+      set.add(s.name);
+    }
+    return m;
+  }, [centerSupplies, approvedIds]);
+
+  // Insumos distintos que al menos un centro aprobado necesita (chips del filtro).
+  const supplyNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const set of supplyByCenter.values()) for (const n of set) names.add(n);
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [supplyByCenter]);
+
+  // Opciones de país a partir de los centros aprobados.
+  const countryOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of approvedCenters) if (c.country) set.add(c.country);
+    const arr = Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
+    return [{ value: '', label: 'Todos los países' }, ...arr.map((c) => ({ value: c, label: c }))];
+  }, [approvedCenters]);
+
+  // Opciones de estado, acotadas al país elegido si lo hay.
+  const stateOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of approvedCenters) {
+      if (selectedCountry && c.country !== selectedCountry) continue;
+      if (c.state) set.add(c.state);
+    }
+    const arr = Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
+    return [{ value: '', label: 'Todos los estados' }, ...arr.map((s) => ({ value: s, label: s }))];
+  }, [approvedCenters, selectedCountry]);
+
+  const hasActiveFilters = !!selectedCountry || !!selectedState || selectedSupplies.length > 0;
+
+  function toggleSupply(name: string) {
+    setSelectedSupplies((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
+    );
+  }
+
+  function clearFilters() {
+    setSelectedCountry('');
+    setSelectedState('');
+    setSelectedSupplies([]);
+  }
+
+  // Centros ordenados por cercanía (si hay ubicación) y filtrados por búsqueda,
+  // país/estado e insumos urgentes seleccionados (todos en AND).
   const ranked = useMemo(() => {
     const base = userPos
       ? sortByDistance(userPos, approvedCenters).map(({ item, km }) => ({ item, km }))
       : approvedCenters.map((c) => ({ item: c, km: null as number | null }));
     const q = query.trim().toLowerCase();
-    if (!q) return base;
-    return base.filter(
-      ({ item }) =>
-        item.name.toLowerCase().includes(q) || item.address.toLowerCase().includes(q),
-    );
-  }, [userPos, query, approvedCenters]);
+    return base.filter(({ item }) => {
+      if (q && !(item.name.toLowerCase().includes(q) || item.address.toLowerCase().includes(q)))
+        return false;
+      if (selectedCountry && item.country !== selectedCountry) return false;
+      if (selectedState && item.state !== selectedState) return false;
+      if (selectedSupplies.length > 0) {
+        const set = supplyByCenter.get(item.id);
+        if (!set || !selectedSupplies.some((s) => set.has(s))) return false;
+      }
+      return true;
+    });
+  }, [userPos, query, approvedCenters, selectedCountry, selectedState, selectedSupplies, supplyByCenter]);
+
+  // Mismo conjunto filtrado que la lista, para que el mapa sea coherente.
+  const filteredCenters = useMemo(() => ranked.map((r) => r.item), [ranked]);
 
   // Distancia (km) por id de centro, para pintarla en cada tarjeta/ficha.
   const kmById = useMemo(() => {
@@ -159,10 +237,10 @@ export function PublicHome() {
   const visibleCenters = ranked.slice(0, visibleCount);
   const hasMore = visibleCount < ranked.length;
 
-  // Reinicia la tanda cuando cambia el filtro/orden (búsqueda o ubicación).
+  // Reinicia la tanda cuando cambia el filtro/orden (búsqueda, ubicación o filtros).
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [query, userPos]);
+  }, [query, userPos, selectedCountry, selectedState, selectedSupplies]);
 
   // Observa el centinela del final para pedir la siguiente tanda.
   useEffect(() => {
@@ -573,9 +651,76 @@ export function PublicHome() {
         </div>
       </div>
 
+      {/* Filtros: país/estado + insumos urgentes (afectan lista y mapa) */}
+      <section className={cn(
+        "mx-auto mt-4 w-full max-w-6xl px-4",
+        activeMobileTab !== 'centers' && "hidden lg:block"
+      )}>
+        <div className="flex flex-col gap-3 rounded-xl border border-line-soft bg-surface p-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="sm:w-52">
+              <Select
+                label="País"
+                options={countryOptions}
+                value={selectedCountry}
+                onChange={(v) => { setSelectedCountry(v); setSelectedState(''); }}
+              />
+            </div>
+            <div className="sm:w-52">
+              <Select
+                label="Estado"
+                options={stateOptions}
+                value={selectedState}
+                onChange={setSelectedState}
+              />
+            </div>
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                leftIcon={<X className="h-4 w-4" />}
+              >
+                Limpiar filtros
+              </Button>
+            )}
+          </div>
+
+          {supplyNames.length > 0 && (
+            <div className="flex flex-col gap-1.5 border-t border-line-soft pt-3">
+              <span className="font-display text-[10px] font-black uppercase tracking-wider text-muted">
+                Filtrar por insumo urgente
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {supplyNames.map((name) => {
+                  const active = selectedSupplies.includes(name);
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => toggleSupply(name)}
+                      aria-pressed={active}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 font-body text-xs font-bold transition",
+                        active
+                          ? "border-rojo bg-rojo/10 text-rojo"
+                          : "border-line-soft bg-surface-2 text-body hover:border-rojo/40 hover:text-rojo"
+                      )}
+                    >
+                      {renderSupplyIcon(null, name, 'h-3.5 w-3.5')}
+                      {name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* Lista (dominante) + mapa (apoyo) */}
       <section className={cn(
-        "mx-auto mt-5 flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 lg:grid lg:grid-cols-[1.25fr_1fr]",
+        "mx-auto mt-4 flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 lg:grid lg:grid-cols-[1.25fr_1fr]",
         activeMobileTab !== 'centers' && "hidden lg:grid"
       )}>
         {/* Lista */}
@@ -623,7 +768,7 @@ export function PublicHome() {
         <div className="order-1 lg:order-2 sticky top-[105px] z-10 bg-bg lg:static lg:z-0">
           <div className="h-52 overflow-hidden rounded-xl border border-line-soft shadow-card lg:sticky lg:top-20 lg:h-[70vh]">
             <CenterMap
-              centers={approvedCenters}
+              centers={filteredCenters}
               userPosition={userPos}
               selectedId={mapSelectedId}
               flyTo={flyTo}

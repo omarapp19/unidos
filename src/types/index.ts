@@ -38,6 +38,10 @@ export interface Center {
   is_verified: boolean;
   /** Organización autorizante (p. ej. Cruz Roja). */
   organization: string;
+  /** Estado/provincia (derivado de la dirección, editable). null si no se pudo inferir. */
+  state: string | null;
+  /** País del centro. Por defecto 'Venezuela'. */
+  country: string;
   created_at: string;
 }
 
