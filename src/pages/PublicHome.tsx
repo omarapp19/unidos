@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RefreshCw, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X, Users, Link2, ChevronDown, ChevronRight } from 'lucide-react';
 import { renderSupplyIcon } from '@/lib/supplyIcons';
@@ -86,6 +86,10 @@ export function PublicHome() {
   const [selectedCountry, setSelectedCountry] = useState('');
   const [selectedState, setSelectedState] = useState('');
   const [selectedSupplies, setSelectedSupplies] = useState<string[]>([]);
+  // Chips de insumos en una sola fila + "ver más" (medido contra el ancho real).
+  const [showAllSupplies, setShowAllSupplies] = useState(false);
+  const [hiddenSupplyCount, setHiddenSupplyCount] = useState(0);
+  const supplyRowRef = useRef<HTMLDivElement>(null);
   // Centro abierto en la ficha ampliada (contacto + redes). `null` = modal cerrado.
   const [detailCenter, setDetailCenter] = useState<Center | null>(null);
   const [detailFalta, setDetailFalta] = useState<string[]>([]);
@@ -241,6 +245,31 @@ export function PublicHome() {
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [query, userPos, selectedCountry, selectedState, selectedSupplies]);
+
+  // Cuenta cuántos chips de insumo no entran en la primera fila (para "+N").
+  useLayoutEffect(() => {
+    const el = supplyRowRef.current;
+    if (!el || showAllSupplies) {
+      setHiddenSupplyCount(0);
+      return;
+    }
+    const measure = () => {
+      const children = Array.from(el.children) as HTMLElement[];
+      const first = children[0];
+      if (!first) {
+        setHiddenSupplyCount(0);
+        return;
+      }
+      const firstTop = first.offsetTop;
+      let hidden = 0;
+      for (const c of children) if (c.offsetTop > firstTop) hidden++;
+      setHiddenSupplyCount(hidden);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [showAllSupplies, supplyNames]);
 
   // Observa el centinela del final para pedir la siguiente tanda.
   useEffect(() => {
@@ -691,14 +720,21 @@ export function PublicHome() {
             </p>
           )}
 
-          {/* Insumos urgentes (chips) */}
+          {/* Insumos urgentes (chips) — una sola fila con "+N" para ver el resto */}
           {supplyNames.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <span className="font-display text-[10px] font-black uppercase tracking-wider text-muted">
                 Filtrar por insumo urgente
               </span>
-              <div className="flex flex-wrap gap-1.5">
-                {supplyNames.map((name) => {
+              <div className="flex items-start gap-1.5">
+                <div
+                  ref={supplyRowRef}
+                  className={cn(
+                    "flex flex-1 flex-wrap gap-1.5",
+                    !showAllSupplies && "max-h-[34px] overflow-hidden",
+                  )}
+                >
+                  {supplyNames.map((name) => {
                     const active = selectedSupplies.includes(name);
                     return (
                       <button
@@ -719,6 +755,21 @@ export function PublicHome() {
                     );
                   })}
                 </div>
+                {(hiddenSupplyCount > 0 || showAllSupplies) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSupplies((v) => !v)}
+                    aria-expanded={showAllSupplies}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-pill border border-line-soft bg-surface-2 px-3 py-1.5 font-body text-xs font-bold text-muted transition hover:border-azul/40 hover:text-azul"
+                  >
+                    {showAllSupplies ? (
+                      <>Ver menos</>
+                    ) : (
+                      <>+{hiddenSupplyCount}</>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
