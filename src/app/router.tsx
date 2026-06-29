@@ -3,6 +3,9 @@ import { PublicHome } from '@/pages/PublicHome';
 import { PersonasDesaparecidas } from '@/pages/PersonasDesaparecidas';
 import { AyudaCategoria } from '@/pages/AyudaCategoria';
 import { AdminLogin } from '@/pages/AdminLogin';
+import { RecuperarClave } from '@/pages/RecuperarClave';
+import { NuevaClave } from '@/pages/NuevaClave';
+import { Cuenta } from '@/pages/Cuenta';
 import { CenterRegister } from '@/pages/CenterRegister';
 import { AcceptInvitation } from '@/pages/AcceptInvitation';
 import { AdminLayout } from '@/components/layout/AdminLayout';
@@ -26,6 +29,9 @@ export const router = createBrowserRouter([
   { path: '/personas-desaparecidas', element: <PersonasDesaparecidas /> },
   { path: '/ayuda/:categoryId', element: <AyudaCategoria /> },
   { path: '/admin/login', element: <AdminLogin /> },
+  { path: '/admin/recuperar', element: <RecuperarClave /> },
+  { path: '/admin/nueva-clave', element: <NuevaClave /> },
+  { path: '/admin/cuenta', element: <Cuenta /> },
   { path: '/registro', element: <CenterRegister /> },
   { path: '/admin/aceptar-invitacion', element: <AcceptInvitation /> },
   {

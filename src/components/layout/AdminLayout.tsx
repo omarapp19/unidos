@@ -9,6 +9,7 @@ import {
   X,
   Sun,
   Moon,
+  KeyRound,
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -123,6 +124,14 @@ export function AdminLayout() {
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => navigate('/admin/cuenta')}
+            leftIcon={<KeyRound className="h-4 w-4" />}
+          >
+            Cambiar contraseña
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={toggleTheme}
             leftIcon={theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           >
@@ -155,6 +164,18 @@ export function AdminLayout() {
               <p className="font-body text-xs text-muted">{adminName}</p>
             </div>
             <NavItems onNavigate={() => setMobileOpen(false)} />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3 w-full"
+              onClick={() => {
+                setMobileOpen(false);
+                navigate('/admin/cuenta');
+              }}
+              leftIcon={<KeyRound className="h-4 w-4" />}
+            >
+              Cambiar contraseña
+            </Button>
             <div className="mt-3 flex gap-2">
               <Button variant="ghost" size="sm" onClick={toggleTheme} className="flex-1"
                 leftIcon={theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}>
