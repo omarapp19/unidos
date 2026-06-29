@@ -1,10 +1,13 @@
 import { useState, type FormEvent } from 'react';
-import { Plus, UserRound, CheckCircle2 } from 'lucide-react';
+import { Plus, UserRound, CheckCircle2, CloudOff, RefreshCw, WifiOff } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { useQuery } from '@/lib/hooks/useQuery';
 import { useMutation } from '@/lib/hooks/useMutation';
 import { getCategories } from '@/lib/api/categories';
 import { createDonation } from '@/lib/api/donations';
+import { toApiError } from '@/lib/api/errors';
+import { enqueueDonation } from '@/lib/offline/outbox';
+import { useOfflineSync } from '@/lib/offline/useOfflineSync';
 import {
   initialRows,
   addRow,
@@ -31,15 +34,27 @@ export function Donaciones() {
   const categoriesQuery = useQuery(getCategories, []);
   const categories = categoriesQuery.data ?? [];
   const save = useMutation(createDonation);
+  const { online, pending, syncing, syncNow } = useOfflineSync();
 
   const [donorName, setDonorName] = useState('');
   const [rows, setRows] = useState<DonationRowValue[]>(initialRows);
   const [errors, setErrors] = useState<DonationFormErrors>({ rows: {} });
   const [savedCount, setSavedCount] = useState<number | null>(null);
+  const [queuedCount, setQueuedCount] = useState<number | null>(null);
+  const [offlineError, setOfflineError] = useState<string | null>(null);
+
+  /** Vacía el formulario tras un alta (online u offline) exitosa. */
+  function resetForm() {
+    setDonorName('');
+    setRows(initialRows());
+    setErrors({ rows: {} });
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSavedCount(null);
+    setQueuedCount(null);
+    setOfflineError(null);
     const result = validateDonationForm(rows);
     setErrors(result);
     if (!isFormValid(result)) return;
@@ -51,15 +66,36 @@ export function Donaciones() {
       quantity: Number(r.quantity),
     }));
 
+    // Sin conexión: guarda en la cola local; se enviará al reconectar.
+    if (!online) {
+      await queueOffline(items.length, items);
+      return;
+    }
+
     try {
       await save.mutate({ centerId, donorName, items });
       setSavedCount(items.length);
-      // Reset para la próxima donación.
-      setDonorName('');
-      setRows(initialRows());
-      setErrors({ rows: {} });
+      resetForm();
+    } catch (err) {
+      // Si el fallo es de red, no se pierde: se encola para reintento.
+      if (toApiError(err).retryable) {
+        await queueOffline(items.length, items);
+      }
+      // Errores definitivos quedan en `save.error` bajo el formulario.
+    }
+  }
+
+  /** Guarda la donación en la cola offline y refleja el resultado en la UI. */
+  async function queueOffline(
+    count: number,
+    items: { category_id: string; product: string; quantity: number }[],
+  ) {
+    try {
+      await enqueueDonation({ centerId, donorName, items });
+      setQueuedCount(count);
+      resetForm();
     } catch {
-      // El error queda en `save.error`; se muestra bajo el formulario.
+      setOfflineError('No pudimos guardar la donación localmente. Intenta de nuevo.');
     }
   }
 
@@ -76,6 +112,38 @@ export function Donaciones() {
         </p>
       </header>
 
+      {/* Estado de conexión / cola offline */}
+      {(!online || pending > 0) && (
+        <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            {online ? (
+              <CloudOff className="h-5 w-5 shrink-0 text-warning-ink" aria-hidden />
+            ) : (
+              <WifiOff className="h-5 w-5 shrink-0 text-warning-ink" aria-hidden />
+            )}
+            <p className="font-body text-sm text-body">
+              {!online && 'Sin conexión — las donaciones se guardan en este dispositivo. '}
+              {pending > 0
+                ? `${pending} ${pending === 1 ? 'donación pendiente' : 'donaciones pendientes'} de sincronizar.`
+                : 'Se enviarán al volver la conexión.'}
+            </p>
+          </div>
+          {pending > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => void syncNow()}
+              loading={syncing}
+              disabled={!online}
+              leftIcon={<RefreshCw className="h-4 w-4" aria-hidden />}
+            >
+              Sincronizar ahora
+            </Button>
+          )}
+        </div>
+      )}
+
       {savedCount != null && (
         <div className="flex items-center gap-2 rounded-lg bg-success-bg px-4 py-3 text-success-ink">
           <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden />
@@ -83,6 +151,20 @@ export function Donaciones() {
             Donación registrada con {savedCount} {savedCount === 1 ? 'producto' : 'productos'}.
           </p>
         </div>
+      )}
+
+      {queuedCount != null && (
+        <div className="flex items-center gap-2 rounded-lg bg-warning-bg px-4 py-3 text-warning-ink">
+          <CloudOff className="h-5 w-5 shrink-0" aria-hidden />
+          <p className="font-body text-sm font-semibold">
+            Donación guardada sin conexión ({queuedCount}{' '}
+            {queuedCount === 1 ? 'producto' : 'productos'}). Se enviará al reconectar.
+          </p>
+        </div>
+      )}
+
+      {offlineError && (
+        <p className="font-body text-sm font-semibold text-danger-ink">{offlineError}</p>
       )}
 
       <Card>

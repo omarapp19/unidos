@@ -8,15 +8,20 @@ import type { Center } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { fromPostgrestError } from './errors';
 import { withRetry } from './retry';
+import { cached, invalidate } from './cache';
+
+/** Prefijo de claves de caché de la lista pública de centros. */
+const CACHE_PREFIX = 'centers:';
 
 /** Columnas que consume la UI (evita `select('*')` para no traer de más). */
 const COLUMNS =
   'id, name, address, lat, lng, phone, whatsapp, instagram, website, email, ' +
-  'schedule, status, is_approved, is_verified, organization, created_at';
+  'schedule, status, is_approved, is_verified, organization, state, country, created_at';
 
-/** Centros aprobados: lo que ve el público en mapa y lista. Sin login. */
+/** Centros aprobados: lo que ve el público en mapa y lista. Sin login. Cacheado. */
 export function getApprovedCenters(): Promise<Center[]> {
-  return withRetry(async () => {
+  return cached(`${CACHE_PREFIX}approved`, () =>
+  withRetry(async () => {
     const { data, error } = await supabase
       .from('centers')
       .select(COLUMNS)
@@ -24,7 +29,7 @@ export function getApprovedCenters(): Promise<Center[]> {
       .order('created_at', { ascending: false });
     if (error) throw fromPostgrestError(error);
     return (data ?? []) as unknown as Center[];
-  });
+  }));
 }
 
 /** Centro por id (el admin solo puede leer el suyo por RLS). */
@@ -45,6 +50,8 @@ export interface CenterPatch {
   name?: string;
   organization?: string;
   address?: string;
+  state?: string | null;
+  country?: string;
   schedule?: string;
   phone?: string | null;
   whatsapp?: string | null;
@@ -116,13 +123,13 @@ export function getApprovedCentersPage(
   verifiedOnly = false,
   search = '',
 ): Promise<CentersPage> {
-  return withRetry(async () => {
+  const term = search.trim();
+  const run = () => withRetry(async () => {
     let query = supabase
       .from('centers')
       .select(COLUMNS, { count: 'exact' })
       .eq('is_approved', true);
     if (verifiedOnly) query = query.eq('is_verified', true);
-    const term = search.trim();
     if (term) {
       // Escapa comas/paréntesis que rompen el parser del filtro `.or`.
       const safe = term.replace(/[,()]/g, ' ');
@@ -136,6 +143,13 @@ export function getApprovedCentersPage(
     if (error) throw fromPostgrestError(error);
     return { rows: (data ?? []) as unknown as Center[], total: count ?? 0 };
   });
+  // Solo cacheamos el navegado por defecto (sin búsqueda): claves acotadas y
+  // alto tráfico. Las búsquedas libres van en vivo (claves ilimitadas, poco reúso).
+  if (term) return run();
+  return cached(
+    `${CACHE_PREFIX}page:${offset}:${limit}:${verifiedOnly ? 'v' : 'all'}`,
+    run,
+  );
 }
 
 /** Aprueba un centro (lo hace visible al público). */
@@ -145,6 +159,7 @@ export async function approveCenter(id: string): Promise<void> {
     .update({ is_approved: true })
     .eq('id', id);
   if (error) throw fromPostgrestError(error);
+  invalidate(CACHE_PREFIX);
 }
 
 /** Marca/desmarca el sello de organización verificada. */
@@ -154,6 +169,7 @@ export async function setCenterVerified(id: string, value: boolean): Promise<voi
     .update({ is_verified: value })
     .eq('id', id);
   if (error) throw fromPostgrestError(error);
+  invalidate(CACHE_PREFIX);
 }
 
 /** Edita datos/coordenadas de un centro y devuelve la fila actualizada. */
@@ -167,6 +183,7 @@ export function updateCenterAdmin(id: string, patch: CenterPatch): Promise<Cente
       .single()
       .then(({ data, error }) => {
         if (error) return reject(fromPostgrestError(error));
+        invalidate(CACHE_PREFIX);
         resolve(data as unknown as Center);
       });
   });
@@ -176,6 +193,7 @@ export function updateCenterAdmin(id: string, patch: CenterPatch): Promise<Cente
 export async function deleteCenter(id: string): Promise<void> {
   const { error } = await supabase.from('centers').delete().eq('id', id);
   if (error) throw fromPostgrestError(error);
+  invalidate(CACHE_PREFIX);
 }
 
 /** Registra un centro huérfano vía RPC SECURITY DEFINER. Devuelve su id. */
@@ -198,6 +216,7 @@ export async function adminRegisterCenter(
     p_is_verified: input.isVerified ?? false,
   });
   if (error) throw fromPostgrestError(error);
+  if (input.isApproved ?? true) invalidate(CACHE_PREFIX);
   return data as string;
 }
 

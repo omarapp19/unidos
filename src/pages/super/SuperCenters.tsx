@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Building2, Plus, Check, Trash2, Pencil, BadgeCheck, AtSign, Globe, Mail, Search, ShieldCheck } from 'lucide-react';
-import type { Center } from '@/types';
+import { Building2, Plus, Check, Trash2, Pencil, BadgeCheck, AtSign, Globe, Mail, Search, ShieldCheck, UserCheck, UserPlus, Send } from 'lucide-react';
+import type { Center, CenterAdminStatus } from '@/types';
 import {
   getPendingCenters,
   getApprovedCentersPage,
@@ -11,6 +11,17 @@ import {
   adminRegisterCenter,
   type CenterPatch,
 } from '@/lib/api/centers';
+import {
+  getCenterClaims,
+  approveCenterClaim,
+  rejectCenterClaim,
+  notifyClaimApproved,
+} from '@/lib/api/claims';
+import type { CenterClaim } from '@/types';
+import {
+  getCenterAdminStatus,
+  inviteCenterAdmin,
+} from '@/lib/api/invitations';
 import { toApiError, type ApiError } from '@/lib/api/errors';
 import { forwardGeocode, reverseGeocodeAddress } from '@/lib/geo';
 import { splitDial } from '@/lib/phone-codes';
@@ -64,6 +75,8 @@ type FormState = {
   name: string;
   organization: string;
   address: string;
+  state: string;
+  country: string;
   instagram: string;
   website: string;
   email: string;
@@ -84,7 +97,8 @@ type ErrorKey =
 type Errors = Partial<Record<ErrorKey, string>>;
 
 const EMPTY_FORM: FormState = {
-  name: '', organization: '', address: '', instagram: '', website: '', email: '',
+  name: '', organization: '', address: '', state: '', country: 'Venezuela',
+  instagram: '', website: '', email: '',
   status: 'receiving',
   lat: '',
   lng: '',
@@ -184,6 +198,10 @@ export function SuperCenters() {
   const update = useMutation((args: { id: string; patch: CenterPatch }) =>
     updateCenterAdmin(args.id, args.patch),
   );
+  // Solicitudes de reclamo de centros huérfanos (mecanismo A).
+  const claimsQ = useQuery(getCenterClaims, []);
+  const approveClaim = useMutation(approveCenterClaim);
+  const rejectClaim = useMutation(rejectCenterClaim);
 
   // null = cerrado, 'new' = alta, Center = edición.
   const [editing, setEditing] = useState<Center | 'new' | null>(null);
@@ -195,6 +213,14 @@ export function SuperCenters() {
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const busy = create.loading || update.loading;
+
+  // Administrador del centro en edición (mecanismo B: invitación por correo).
+  const [adminStatus, setAdminStatus] = useState<CenterAdminStatus | null>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteInfo, setInviteInfo] = useState<string | null>(null);
+  const invite = useMutation((args: { centerId: string; email: string }) =>
+    inviteCenterAdmin(args.centerId, args.email),
+  );
 
   const phoneValid = isValidPhoneNumber(phone.number);
 
@@ -242,11 +268,19 @@ export function SuperCenters() {
     setHasWhatsApp(!!center.whatsapp);
   }
 
+  function resetAdminSection() {
+    setAdminStatus(null);
+    setInviteEmail('');
+    setInviteInfo(null);
+    invite.reset();
+  }
+
   function openNew() {
     setForm(EMPTY_FORM);
     loadStructured();
     setErrors({});
     setFormError(null);
+    resetAdminSection();
     setEditing('new');
   }
   const close = useCallback(() => {
@@ -255,6 +289,7 @@ export function SuperCenters() {
   function openEdit(c: Center) {
     setForm({
       name: c.name, organization: c.organization, address: c.address,
+      state: c.state ?? '', country: c.country ?? 'Venezuela',
       instagram: c.instagram ?? '', website: c.website ?? '', email: c.email ?? '',
       status: c.status,
       lat: String(c.lat),
@@ -263,7 +298,41 @@ export function SuperCenters() {
     loadStructured(c);
     setErrors({});
     setFormError(null);
+    resetAdminSection();
+    setInviteEmail(c.email ?? '');
     setEditing(c);
+    // Carga el estado del admin (tiene admin / invitación pendiente).
+    getCenterAdminStatus(c.id)
+      .then(setAdminStatus)
+      .catch(() => setAdminStatus(null));
+  }
+
+  async function onSendInvite(centerId: string) {
+    setInviteInfo(null);
+    try {
+      const res = await invite.mutate({ centerId, email: inviteEmail });
+      const status = await getCenterAdminStatus(centerId);
+      setAdminStatus(status);
+      setInviteInfo(
+        res.alreadyRegistered
+          ? 'Ese correo ya tenía cuenta: le enviamos un enlace para entrar y aceptar.'
+          : 'Invitación enviada por correo.',
+      );
+    } catch {
+      // El error queda en invite.error; se muestra abajo.
+    }
+  }
+
+  async function onApproveClaim(cl: CenterClaim) {
+    await approveClaim.mutate(cl.id);
+    // Avisa al nuevo admin por correo (best-effort; no bloquea si no hay proveedor).
+    void notifyClaimApproved(cl.claimant_email, cl.center_name || cl.center_organization);
+    claimsQ.refetch();
+    approvedList.reload();
+  }
+  async function onRejectClaim(claimId: string) {
+    await rejectClaim.mutate(claimId);
+    claimsQ.refetch();
   }
 
   function validate(): Errors {
@@ -330,13 +399,20 @@ export function SuperCenters() {
           instagram, website, email: form.email,
           lat: finalLat, lng: finalLng, isApproved: true,
         });
-        if (form.status !== 'receiving') {
-          await updateCenterAdmin(newId, { status: form.status });
+        const newPatch: CenterPatch = {};
+        if (form.status !== 'receiving') newPatch.status = form.status;
+        if (form.state.trim()) newPatch.state = form.state.trim();
+        if (form.country.trim() && form.country.trim() !== 'Venezuela')
+          newPatch.country = form.country.trim();
+        if (Object.keys(newPatch).length > 0) {
+          await updateCenterAdmin(newId, newPatch);
         }
       } else if (editing !== null) {
         const patch: CenterPatch = {
           name: form.name.trim(), organization: form.organization.trim(),
-          address: form.address.trim(), schedule: scheduleStr,
+          address: form.address.trim(),
+          state: form.state.trim() || null, country: form.country.trim() || 'Venezuela',
+          schedule: scheduleStr,
           phone: phoneStr || null, whatsapp: whatsappStr || null,
           instagram: instagram || null, website: website || null,
           email: form.email.trim() || null,
@@ -495,6 +571,62 @@ export function SuperCenters() {
         </section>
       </QueryBoundary>
 
+      {/* Solicitudes de reclamo de centros huérfanos */}
+      <QueryBoundary
+        loading={claimsQ.loading}
+        error={claimsQ.error}
+        onRetry={claimsQ.refetch}
+        loadingLabel="Cargando solicitudes…"
+      >
+        {(claimsQ.data ?? []).length > 0 && (
+          <section className="flex flex-col gap-3">
+            <h2 className="font-display text-h3 font-black text-ink">
+              Solicitudes de reclamo ({(claimsQ.data ?? []).length})
+            </h2>
+            <p className="-mt-1 font-body text-xs text-muted">
+              Verifica que la persona esté ligada al centro antes de aprobar.
+            </p>
+            <div className="scrollbar-thin flex max-h-[60vh] flex-col gap-3 overflow-y-auto pr-1">
+              {(claimsQ.data ?? []).map((cl) => (
+                <Card key={cl.id} className="flex flex-col gap-3 p-4">
+                  <div className="flex flex-col gap-1">
+                    <p className="font-display text-base font-black text-ink">
+                      {cl.center_name || cl.center_organization}
+                    </p>
+                    <p className="font-body text-sm text-muted">
+                      {cl.center_organization} · {cl.center_address}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-surface-2 p-3 text-sm">
+                    <p className="font-body text-ink">
+                      <span className="font-semibold">{cl.full_name}</span>
+                      {cl.claimant_role ? ` — ${cl.claimant_role}` : ''}
+                    </p>
+                    <p className="font-body text-muted">{cl.claimant_email}</p>
+                    {cl.contact_phone && (
+                      <p className="font-body text-muted">Tel: {cl.contact_phone}</p>
+                    )}
+                    {cl.evidence && (
+                      <p className="mt-1 font-body text-body">“{cl.evidence}”</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => onApproveClaim(cl)}
+                      leftIcon={<UserCheck className="h-4 w-4" />}>
+                      Aprobar y asignar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => onRejectClaim(cl.id)}
+                      leftIcon={<Trash2 className="h-4 w-4" />}>
+                      Rechazar
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
+      </QueryBoundary>
+
       {/* Aprobados · carga incremental (10 por página) */}
       <section className="mt-6 flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -626,6 +758,11 @@ export function SuperCenters() {
               onChange={(e) => set('lng', e.target.value)}
               hint="Mueve el pin en el mapa."
             />
+            <Input label="Estado / Provincia (opcional)" placeholder="Zulia"
+              value={form.state} onChange={(e) => set('state', e.target.value)}
+              hint="Usado por el filtro público por estado/país." />
+            <Input label="País" placeholder="Venezuela"
+              value={form.country} onChange={(e) => set('country', e.target.value)} />
           </div>
 
           <LocationField
@@ -672,6 +809,72 @@ export function SuperCenters() {
           <Input label="Correo" type="email" placeholder="centro@organizacion.org"
             leadingIcon={<Mail className="h-4 w-4" aria-hidden />}
             value={form.email} onChange={(e) => set('email', e.target.value)} error={errors.email} />
+
+          {/* Administrador del centro (solo en edición) */}
+          {editing !== 'new' && editing !== null && (
+            <div className="mt-1 flex flex-col gap-2 rounded-lg border border-line bg-surface-2 p-3">
+              <p className="flex items-center gap-2 font-display text-sm font-black text-ink">
+                <UserPlus className="h-4 w-4" aria-hidden />
+                Administrador
+              </p>
+              {adminStatus?.has_admin ? (
+                <p className="font-body text-sm text-body">
+                  Asignado a <span className="font-semibold text-ink">{adminStatus.admin_email}</span>.
+                </p>
+              ) : adminStatus?.pending_invitation_email ? (
+                <div className="flex flex-col gap-2">
+                  <p className="font-body text-sm text-body">
+                    Invitación pendiente para{' '}
+                    <span className="font-semibold text-ink">{adminStatus.pending_invitation_email}</span>.
+                  </p>
+                  <div className="flex items-end gap-2">
+                    <Input
+                      label="Reenviar a otro correo"
+                      type="email"
+                      placeholder="responsable@centro.org"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button type="button" variant="secondary" loading={invite.loading}
+                      disabled={!inviteEmail.trim()}
+                      onClick={() => onSendInvite(editing.id)}
+                      leftIcon={<Send className="h-4 w-4" />}>
+                      Reenviar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <p className="font-body text-sm text-muted">
+                    Centro sin administrador. Invita por correo a la persona responsable.
+                  </p>
+                  <div className="flex items-end gap-2">
+                    <Input
+                      label="Correo del responsable"
+                      type="email"
+                      placeholder="responsable@centro.org"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button type="button" loading={invite.loading}
+                      disabled={!inviteEmail.trim()}
+                      onClick={() => onSendInvite(editing.id)}
+                      leftIcon={<Send className="h-4 w-4" />}>
+                      Invitar
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {inviteInfo && (
+                <p className="font-body text-sm font-semibold text-success-ink">{inviteInfo}</p>
+              )}
+              {invite.error && (
+                <p className="font-body text-sm text-danger-ink">{invite.error.message}</p>
+              )}
+            </div>
+          )}
 
           {formError && <p className="font-body text-sm text-danger-ink">{formError}</p>}
           <div className="mt-2 flex justify-end gap-2">

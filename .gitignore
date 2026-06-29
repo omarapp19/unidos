@@ -1,6 +1,8 @@
 dist/*
+dev-dist/*
 node_modules/*
 .env
 supabase/.temp/
 supabase/.branches/
 docs/*
+.playwright-mcp/*

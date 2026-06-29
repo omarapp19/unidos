@@ -134,6 +134,21 @@ abundantes, (3) crecimiento/difusión, (4) mejoras de producto.
   buscando centros a la vez). La lista no cambia cada segundo: cachear esa consulta
   (CDN/Vercel y/o capa de query) con TTL de 5–10 min. Mejor datos con delay que un
   Error 500 por conexiones simultáneas. Minimizar consultas a la BD.
+  - ✅ **Capa de query cacheada** (`src/lib/api/cache.ts`): TTL 5 min en memoria +
+    coalescencia de peticiones en vuelo + persistencia en localStorage (recarga
+    dentro del TTL = 0 consultas). Invalida tras aprobar/editar/borrar centro.
+  - ✅ **Índices de lectura** (migración `20260627170000_centers_read_indexes.sql`):
+    índice parcial para aprobados + trigram para búsqueda. Evita seq scan bajo carga
+    (causa probable del 500). **Pendiente `supabase db push` en prod.**
+  - ⏳ **SWR client-side (stale-while-revalidate):** al vencer el TTL, servir el dato
+    viejo al instante y revalidar en segundo plano (sin spinner). Mejora velocidad
+    percibida en recargas. Cambio acotado en `cache.ts`. *Pendiente.*
+  - ⏳ **Caché compartida (verdadero tope del herd):** la capa de query es por
+    navegador — no reduce el piso de N usuarios únicos. Para cortar de verdad el
+    tráfico a Postgres, snapshot estático de la lista en **Supabase Storage**
+    (CDN/Cloudflare), regenerado cada 5 min por Edge Function/`pg_cron`; o ruta
+    `/api/centers` con `s-maxage` en Vercel (bloqueado hasta acceso al tech lead).
+    Hacer solo si los índices + caché de query no aguantan la carga real.
 - **Optimizar carga de la web (que cargue rápido en redes).** Enlace limpio,
   bundle liviano, imágenes optimizadas, lazy-load del mapa, buen LCP en móvil
   (la mayoría entra desde el teléfono).
