@@ -35,6 +35,52 @@ export async function signOut(): Promise<void> {
   if (error) throw toApiError(error);
 }
 
+/**
+ * Envía el correo de recuperación con un enlace a `redirectTo`. Al abrirlo, el
+ * cliente detecta el token en la URL (detectSessionInUrl) y emite el evento
+ * PASSWORD_RECOVERY: ahí mostramos el formulario para fijar la nueva clave.
+ * No revelamos si el correo existe: el llamador muestra siempre éxito genérico.
+ */
+export async function requestPasswordReset(
+  email: string,
+  redirectTo: string,
+): Promise<void> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo,
+  });
+  if (error) throw toApiError(error);
+}
+
+/**
+ * Si el enlace de recuperación usó el flujo PKCE (`?code=` en la URL) en lugar
+ * del hash con tokens, intercambia el código por una sesión. Idempotente: si no
+ * hay código o ya hay sesión, no hace nada. Lo usamos como respaldo cuando el
+ * evento PASSWORD_RECOVERY no llega solo con detectSessionInUrl.
+ */
+export async function exchangeRecoveryCode(url: string): Promise<boolean> {
+  const code = new URL(url).searchParams.get('code');
+  if (!code) return false;
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) throw toApiError(error);
+  return true;
+}
+
+/**
+ * Actualiza la contraseña del usuario autenticado (sesión normal o de
+ * recuperación). Supabase aplica sus reglas mínimas del lado del servidor.
+ */
+export async function updatePassword(newPassword: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) {
+    throw new ApiError(
+      error.message === 'New password should be different from the old password.'
+        ? 'La nueva contraseña debe ser distinta a la actual.'
+        : error.message,
+      { status: error.status, cause: error },
+    );
+  }
+}
+
 /** Sesión actual (o null si no hay). */
 export async function getSession(): Promise<Session | null> {
   const { data, error } = await supabase.auth.getSession();

@@ -26,6 +26,8 @@ export interface CenterDetailModalProps {
   distanceKm?: number | null;
   /** Insumos que el centro necesita con urgencia. */
   urgentSupplies?: string[];
+  /** Categorías que el centro ya recibe con frecuencia (cualitativo). */
+  receivedCategories?: string[];
 }
 
 /** Una fila de contacto (icono + etiqueta + valor enlazable). */
@@ -72,6 +74,7 @@ export function CenterDetailModal({
   onClose,
   distanceKm,
   urgentSupplies = [],
+  receivedCategories = [],
 }: CenterDetailModalProps) {
   if (!center) return null;
 
@@ -132,6 +135,25 @@ export function CenterDetailModal({
                   className="rounded-pill bg-warning-bg px-3 py-1 font-body text-2xs font-bold text-warning-ink"
                 >
                   {supply}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Lo que ya recibe */}
+        {receivedCategories.length > 0 && (
+          <div>
+            <p className="mb-1.5 font-body text-2xs font-bold uppercase tracking-eyebrow text-subtle">
+              Lo que ya recibe con frecuencia
+            </p>
+            <ul className="flex flex-wrap gap-1.5">
+              {receivedCategories.map((cat) => (
+                <li
+                  key={cat}
+                  className="rounded-pill bg-success-bg px-3 py-1 font-body text-2xs font-bold text-success-ink"
+                >
+                  {cat}
                 </li>
               ))}
             </ul>

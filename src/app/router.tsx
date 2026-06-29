@@ -2,6 +2,24 @@ import { lazy, Suspense, type ReactNode } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { Spinner } from '@/components/ui';
 import { PublicHome } from '@/pages/PublicHome';
+import { PersonasDesaparecidas } from '@/pages/PersonasDesaparecidas';
+import { AyudaCategoria } from '@/pages/AyudaCategoria';
+import { AdminLogin } from '@/pages/AdminLogin';
+import { RecuperarClave } from '@/pages/RecuperarClave';
+import { NuevaClave } from '@/pages/NuevaClave';
+import { Cuenta } from '@/pages/Cuenta';
+import { CenterRegister } from '@/pages/CenterRegister';
+import { AcceptInvitation } from '@/pages/AcceptInvitation';
+import { AdminLayout } from '@/components/layout/AdminLayout';
+import { Dashboard } from '@/pages/admin/Dashboard';
+import { Donaciones } from '@/pages/admin/Donaciones';
+import { Historial } from '@/pages/admin/Historial';
+import { SuperLayout } from '@/components/layout/SuperLayout';
+import { RequireRole } from '@/components/layout/RequireRole';
+import { SuperCenters } from '@/pages/super/SuperCenters';
+import { SuperCategories } from '@/pages/super/SuperCategories';
+import { SuperSupplies } from '@/pages/super/SuperSupplies';
+import { SuperHelpResources } from '@/pages/super/SuperHelpResources';
 
 /* ===========================================================================
    Rutas del MVP (PRD). Público sin login en `/`; panel privado bajo `/admin`.
@@ -73,10 +91,14 @@ function L(node: ReactNode): ReactNode {
 
 export const router = createBrowserRouter([
   { path: '/', element: <PublicHome /> },
-  { path: '/personas-desaparecidas', element: L(<PersonasDesaparecidas />) },
-  { path: '/ayuda/:categoryId', element: L(<AyudaCategoria />) },
-  { path: '/admin/login', element: L(<AdminLogin />) },
-  { path: '/registro', element: L(<CenterRegister />) },
+  { path: '/personas-desaparecidas', element: <PersonasDesaparecidas /> },
+  { path: '/ayuda/:categoryId', element: <AyudaCategoria /> },
+  { path: '/admin/login', element: <AdminLogin /> },
+  { path: '/admin/recuperar', element: <RecuperarClave /> },
+  { path: '/admin/nueva-clave', element: <NuevaClave /> },
+  { path: '/admin/cuenta', element: <Cuenta /> },
+  { path: '/registro', element: <CenterRegister /> },
+  { path: '/admin/aceptar-invitacion', element: <AcceptInvitation /> },
   {
     path: '/admin',
     element: L(<AdminLayout />),

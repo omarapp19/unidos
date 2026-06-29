@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
-import { Building2, Tags, LogOut, Menu, X, Shield, Sun, Moon, Boxes, Link2 } from 'lucide-react';
+import { Building2, Tags, LogOut, Menu, X, Sun, Moon, Boxes, Link2, KeyRound } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -55,8 +55,14 @@ export function SuperLayout() {
 
   const Brand = (
     <Link to="/admin/super/centros" className="flex items-center gap-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-md bg-rojo text-white">
-        <Shield className="h-5 w-5" aria-hidden />
+      <span className="logo-badge flex h-8 w-8 items-center justify-center rounded-md">
+        <img
+          src="/logo-mark.png"
+          alt="Centros de Acopio Venezuela"
+          className="h-full w-full object-contain"
+          width={32}
+          height={32}
+        />
       </span>
       <span className="font-display text-h3 font-black tracking-snug text-ink">Unidos</span>
     </Link>
@@ -76,6 +82,14 @@ export function SuperLayout() {
         </div>
         <NavItems />
         <div className="mt-auto flex flex-col gap-2 pt-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/admin/cuenta')}
+            leftIcon={<KeyRound className="h-4 w-4" />}
+          >
+            Cambiar contraseña
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -106,6 +120,18 @@ export function SuperLayout() {
         {mobileOpen && (
           <div className="border-b border-line-soft bg-surface px-4 py-4 lg:hidden">
             <NavItems onNavigate={() => setMobileOpen(false)} />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3 w-full"
+              onClick={() => {
+                setMobileOpen(false);
+                navigate('/admin/cuenta');
+              }}
+              leftIcon={<KeyRound className="h-4 w-4" />}
+            >
+              Cambiar contraseña
+            </Button>
             <div className="mt-3 flex gap-2">
               <Button variant="ghost" size="sm" onClick={toggleTheme} className="flex-1"
                 leftIcon={theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}>

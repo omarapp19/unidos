@@ -7,9 +7,9 @@ import {
   LogOut,
   Menu,
   X,
-  MapPin,
   Sun,
   Moon,
+  KeyRound,
 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -82,11 +82,22 @@ export function AdminLayout() {
   if (profile?.role === 'superadmin') {
     return <Navigate to="/admin/super" replace />;
   }
+  // Sesión válida pero sin centro asignado (p. ej. reclamo aún sin aprobar): no
+  // tiene panel que mostrar; el login explica el estado de su solicitud.
+  if (!profile?.center_id) {
+    return <Navigate to="/admin/login" replace />;
+  }
 
   const Brand = (
     <Link to="/admin/dashboard" className="flex items-center gap-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-md bg-rojo text-white">
-        <MapPin className="h-5 w-5" aria-hidden />
+      <span className="logo-badge flex h-8 w-8 items-center justify-center rounded-md">
+        <img
+          src="/logo-mark.png"
+          alt="Centros de Acopio Venezuela"
+          className="h-full w-full object-contain"
+          width={32}
+          height={32}
+        />
       </span>
       <span className="font-display text-h3 font-black tracking-snug text-ink">Unidos</span>
     </Link>
@@ -110,6 +121,14 @@ export function AdminLayout() {
         </div>
         <NavItems />
         <div className="mt-auto flex flex-col gap-2 pt-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/admin/cuenta')}
+            leftIcon={<KeyRound className="h-4 w-4" />}
+          >
+            Cambiar contraseña
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -145,6 +164,18 @@ export function AdminLayout() {
               <p className="font-body text-xs text-muted">{adminName}</p>
             </div>
             <NavItems onNavigate={() => setMobileOpen(false)} />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3 w-full"
+              onClick={() => {
+                setMobileOpen(false);
+                navigate('/admin/cuenta');
+              }}
+              leftIcon={<KeyRound className="h-4 w-4" />}
+            >
+              Cambiar contraseña
+            </Button>
             <div className="mt-3 flex gap-2">
               <Button variant="ghost" size="sm" onClick={toggleTheme} className="flex-1"
                 leftIcon={theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}>

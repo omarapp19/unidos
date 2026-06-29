@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Navigation, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, Stethoscope, TestTube, Pill, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X, Users, Link2, ChevronDown, ChevronRight } from 'lucide-react';
+import { RefreshCw, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X, Users, Link2, ChevronDown, ChevronRight } from 'lucide-react';
+import { renderSupplyIcon } from '@/lib/supplyIcons';
 import { useTheme } from '@/lib/theme';
 import { nearest, sortByDistance, reverseGeocode, type LatLng, DEFAULT_LATLNG } from '@/lib/geo';
 import { categoryTotals } from '@/lib/stats';
@@ -8,17 +9,18 @@ import { useQuery } from '@/lib/hooks/useQuery';
 import { getApprovedCenters } from '@/lib/api/centers';
 import { getCategories } from '@/lib/api/categories';
 import { getNetworkDonationItems } from '@/lib/api/donations';
-import { getNeededSupplies } from '@/lib/api/supplies';
+import { getNeededSupplies, getCenterPublicSummary, getCentersNeededSupplies } from '@/lib/api/supplies';
 import { getHelpCategories } from '@/lib/api/helpResources';
 import type { Center } from '@/types';
 import { cn } from '@/lib/utils';
-import { Button, Card, Badge, Input, EmptyState, Spinner, QueryBoundary } from '@/components/ui';
+import { Button, Card, Badge, Input, Select, EmptyState, Spinner, QueryBoundary } from '@/components/ui';
 import {
   CenterCard,
   CenterDetailModal,
   CategoryBar,
   type CategoryBarColor,
   SuggestCenterModal,
+  OnboardingTour,
 } from '@/components/domain';
 import { LazyCenterMap as CenterMap } from '@/components/map/LazyCenterMap';
 
@@ -33,6 +35,18 @@ import { LazyCenterMap as CenterMap } from '@/components/map/LazyCenterMap';
 
 const BAR_COLORS: CategoryBarColor[] = ['azul', 'amarillo', 'rojo', 'success'];
 
+/**
+ * Ejemplos representativos de lo que más se dona en el país. Solo se usan como
+ * orientación cuando aún no hay donaciones reales cargadas; en cuanto entran
+ * datos reales, la sección los reemplaza por el top real de la red.
+ */
+const FREQUENT_DONATION_EXAMPLES = [
+  'Agua potable',
+  'Ropa y calzado',
+  'Alimentos no perecederos',
+  'Kits de higiene personal',
+];
+
 /** Cuántos centros se cargan por tanda al scrollear. */
 const PAGE_SIZE = 6;
 
@@ -41,188 +55,7 @@ const DEFAULT_LOCATION = 'Chacao, Caracas';
 
 type GeoState = 'idle' | 'loading' | 'granted' | 'denied';
 
-function getSupplyIcon(name: string, sizeClass = 'h-4 w-4') {
-  const n = name.toLowerCase();
-  const cls = `${sizeClass} shrink-0`;
-  if (n.includes('med') || n.includes('salud') || n.includes('sanit')) {
-    return <Stethoscope className={`${cls} text-rojo`} />;
-  }
-  if (n.includes('ampoll') || n.includes('inyect')) {
-    return <TestTube className={`${cls} text-azul`} />;
-  }
-  if (n.includes('tablet') || n.includes('pastill') || n.includes('pild') || n.includes('medicament')) {
-    return <Pill className={`${cls} text-amarillo`} />;
-  }
-  return <HeartPulse className={`${cls} text-success`} />;
-}
 
-interface SimulatedDonation {
-  id: string;
-  text: string;
-  categoryName: string;
-  categoryTheme: 'azul' | 'rojo' | 'amarillo' | 'success' | 'purple' | 'orange';
-  iconName: 'apple' | 'heart' | 'droplet' | 'water' | 'shirt' | 'wrench';
-  timestamp: string;
-}
-
-const DONATION_TEMPLATES = [
-  { text: 'caja de agua', categoryName: 'Agua e Hidratación', theme: 'success', icon: 'water', range: [1, 4] },
-  { text: 'botellas de agua', categoryName: 'Agua e Hidratación', theme: 'success', icon: 'water', range: [2, 12] },
-  { text: 'medicamentos en tabletas', categoryName: 'Medicinas e Insumos', theme: 'success', icon: 'water', range: [3, 8] },
-  { text: 'latas de atún', categoryName: 'Alimentos No Perecederos', theme: 'azul', icon: 'apple', range: [3, 10] },
-  { text: 'paquetes de pasta', categoryName: 'Alimentos No Perecederos', theme: 'azul', icon: 'apple', range: [2, 6] },
-  { text: 'kilos de arroz', categoryName: 'Alimentos No Perecederos', theme: 'azul', icon: 'apple', range: [1, 5] },
-  { text: 'Ampollas', categoryName: 'Medicina s e Insumos', theme: 'azul', icon: 'apple', range: [1, 3] },
-  { text: 'insumos medicos', categoryName: 'Medicinas e Insumos', theme: 'rojo', icon: 'heart', range: [1, 5] },
-  { text: 'vendas y gasas', categoryName: 'Medicinas e Insumos', theme: 'rojo', icon: 'heart', range: [4, 15] },
-  { text: 'frascos de alcohol', categoryName: 'Medicinas e Insumos', theme: 'rojo', icon: 'heart', range: [1, 4] },
-  { text: 'prendas de ropa', categoryName: 'Ropa, Calzado y Cobijo', theme: 'purple', icon: 'shirt', range: [2, 10] },
-  { text: 'cobijas y sabanas', categoryName: 'Ropa, Calzado y Cobijo', theme: 'purple', icon: 'shirt', range: [1, 4] },
-  { text: 'pares de zapatos', categoryName: 'Ropa, Calzado y Cobijo', theme: 'purple', icon: 'shirt', range: [1, 3] },
-  { text: 'Guantes de latex', categoryName: 'Medicinas e Insumos', theme: 'amarillo', icon: 'droplet', range: [3, 8] },
-  { text: 'cremas dentales', categoryName: 'Higiene Personal', theme: 'amarillo', icon: 'droplet', range: [2, 6] },
-  { text: 'paquetes de pañales', categoryName: 'Higiene Personal', theme: 'amarillo', icon: 'droplet', range: [1, 3] },
-  { text: 'linternas LED', categoryName: 'Herramientas y Logística', theme: 'orange', icon: 'wrench', range: [1, 3] },
-  { text: 'Herramientas', categoryName: 'Herramientas y Logística', theme: 'orange', icon: 'wrench', range: [2, 6] },
-  { text: 'guantes de trabajo', categoryName: 'Herramientas y Logística', theme: 'orange', icon: 'wrench', range: [1, 4] },
-];
-
-function getSimulatedIcon(iconName: string, className: string) {
-  switch (iconName) {
-    case 'apple': return <Apple className={className} />;
-    case 'heart': return <HeartPulse className={className} />;
-    case 'droplet': return <Droplet className={className} />;
-    case 'water': return <GlassWater className={className} />;
-    case 'shirt': return <Shirt className={className} />;
-    case 'wrench': return <Wrench className={className} />;
-    default: return <Apple className={className} />;
-  }
-}
-
-const THEME_STYLES = {
-  azul: { bg: 'bg-azul/10', text: 'text-azul-ink', border: 'border-azul/20' },
-  rojo: { bg: 'bg-rojo/10', text: 'text-rojo-ink', border: 'border-rojo/20' },
-  amarillo: { bg: 'bg-amarillo/10', text: 'text-amarillo-ink', border: 'border-amarillo/20' },
-  success: { bg: 'bg-success/10', text: 'text-success-ink', border: 'border-success/20' },
-  purple: { bg: 'bg-purple-500/10', text: 'text-purple-600', border: 'border-purple-500/20' },
-  orange: { bg: 'bg-orange-500/10', text: 'text-orange-600', border: 'border-orange-500/20' },
-};
-
-function DonationSimulator() {
-  const [donations, setDonations] = useState<SimulatedDonation[]>([]);
-
-  useEffect(() => {
-    // Generar las primeras 3 donaciones iniciales
-    const initialList: SimulatedDonation[] = [];
-    for (let i = 0; i < 3; i++) {
-      const template = DONATION_TEMPLATES[Math.floor(Math.random() * DONATION_TEMPLATES.length)];
-      if (!template) continue;
-      const [min, max] = template.range;
-      if (min === undefined || max === undefined) continue;
-      const quantity = Math.floor(Math.random() * (max - min + 1)) + min;
-      initialList.push({
-        id: `initial-${i}-${Math.random()}`,
-        text: `+${quantity} ${template.text}`,
-        categoryName: template.categoryName,
-        categoryTheme: template.theme as any,
-        iconName: template.icon as any,
-        timestamp: 'hace unos momentos',
-      });
-    }
-    setDonations(initialList);
-
-    const interval = setInterval(() => {
-      const template = DONATION_TEMPLATES[Math.floor(Math.random() * DONATION_TEMPLATES.length)];
-      if (!template) return;
-      const [min, max] = template.range;
-      if (min === undefined || max === undefined) return;
-      const quantity = Math.floor(Math.random() * (max - min + 1)) + min;
-      const newDonation: SimulatedDonation = {
-        id: `sim-${Date.now()}-${Math.random()}`,
-        text: `+${quantity} ${template.text}`,
-        categoryName: template.categoryName,
-        categoryTheme: template.theme as any,
-        iconName: template.icon as any,
-        timestamp: 'hace unos segundos',
-      };
-
-      setDonations((prev) => [newDonation, ...prev.slice(0, 2)]);
-    }, 2800);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div className="flex flex-col h-full rounded-xl border border-line-soft bg-surface-2/30 p-4">
-      <style>{`
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateY(-12px) scale(0.97);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        .animate-feed-item {
-          animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-      `}</style>
-
-      <div className="flex items-center justify-between border-b border-line-soft pb-2.5 mb-3">
-        <div className="flex items-center gap-1.5">
-          <Activity className="h-4 w-4 text-rojo animate-pulse" />
-          <span className="font-display text-2xs font-black uppercase tracking-wider text-ink">
-            Actividad Reciente (En Vivo)
-          </span>
-        </div>
-
-        <span className="inline-flex items-center gap-1 rounded-pill bg-success-bg px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-success-ink border border-success/15 select-none">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
-          </span>
-          En Vivo
-        </span>
-      </div>
-
-      <div className="flex flex-col gap-2 min-h-[220px] justify-start">
-        {donations.map((item, idx) => {
-          const style = THEME_STYLES[item.categoryTheme];
-          return (
-            <div
-              key={item.id}
-              className={`animate-feed-item flex items-center justify-between p-3 rounded-lg border ${style.border} bg-surface transition-all duration-300 ${idx === 0 ? 'ring-1 ring-azul/10 shadow-xs' : 'opacity-60 scale-95 origin-top'
-                }`}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${style.bg} ${style.text} shrink-0`}>
-                  {getSimulatedIcon(item.iconName, 'h-4.5 w-4.5')}
-                </span>
-                <div className="min-w-0">
-                  <p className="font-display text-xs font-black tracking-tight text-ink">
-                    <span className={`${style.text} font-black mr-1`}>
-                      {item.text.split(' ')[0]}
-                    </span>
-                    {item.text.substring(item.text.indexOf(' ') + 1)}
-                  </p>
-                  <p className="font-body text-[10px] text-muted truncate">
-                    {item.categoryName}
-                  </p>
-                </div>
-              </div>
-
-              <span className="font-body text-[9px] text-subtle shrink-0 ml-2 select-none">
-                {idx === 0 ? 'hace un instante' : item.timestamp}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 export function PublicHome() {
   const { theme, toggleTheme } = useTheme();
@@ -233,10 +66,13 @@ export function PublicHome() {
   const itemsQuery = useQuery(getNetworkDonationItems, []);
   const suppliesQuery = useQuery(getNeededSupplies, []);
   const helpCatsQuery = useQuery(getHelpCategories, []);
+  // Insumos urgentes por centro (para el filtro del mapa por insumos).
+  const centerSuppliesQuery = useQuery(getCentersNeededSupplies, []);
   const approvedCenters = centersQuery.data ?? [];
   const categories = categoriesQuery.data ?? [];
   const donationItems = itemsQuery.data ?? [];
   const neededSupplies = suppliesQuery.data ?? [];
+  const centerSupplies = centerSuppliesQuery.data ?? [];
   const [userPos, setUserPos] = useState<LatLng | null>(null);
   const [geoState, setGeoState] = useState<GeoState>('idle');
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -246,8 +82,18 @@ export function PublicHome() {
   const [mapSelectedId, setMapSelectedId] = useState<string | null>(null);
   const [flyTo, setFlyTo] = useState<LatLng | null>(null);
   const [query, setQuery] = useState('');
+  // Filtros geográficos (país/estado) y por insumo urgente. '' = sin filtro.
+  const [selectedCountry, setSelectedCountry] = useState('');
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedSupplies, setSelectedSupplies] = useState<string[]>([]);
+  // Chips de insumos en una sola fila + "ver más" (medido contra el ancho real).
+  const [showAllSupplies, setShowAllSupplies] = useState(false);
+  const [hiddenSupplyCount, setHiddenSupplyCount] = useState(0);
+  const supplyRowRef = useRef<HTMLDivElement>(null);
   // Centro abierto en la ficha ampliada (contacto + redes). `null` = modal cerrado.
   const [detailCenter, setDetailCenter] = useState<Center | null>(null);
+  const [detailFalta, setDetailFalta] = useState<string[]>([]);
+  const [detailRecibe, setDetailRecibe] = useState<string[]>([]);
   const [suggestModalOpen, setSuggestModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
@@ -256,6 +102,23 @@ export function PublicHome() {
   // Control para inicializar el centro más cercano una sola vez cuando
   // coincidan la disponibilidad de la ubicación y de los centros cargados.
   const hasInitializedNearestRef = useRef(false);
+
+  // Carga bajo demanda: insumos faltantes y categorías recibidas del centro abierto en ficha.
+  useEffect(() => {
+    // Reset al cambiar de centro para no mostrar los chips del centro anterior
+    // mientras llegan los nuevos datos.
+    setDetailFalta([]);
+    setDetailRecibe([]);
+    if (!detailCenter) return;
+    let active = true;
+    getNeededSupplies(detailCenter.id)
+      .then((rows) => { if (active) setDetailFalta(rows.map((r) => r.name)); })
+      .catch(() => { if (active) setDetailFalta([]); });
+    getCenterPublicSummary(detailCenter.id)
+      .then((rows) => { if (active) setDetailRecibe(rows.map((r) => r.category_name)); })
+      .catch(() => { if (active) setDetailRecibe([]); });
+    return () => { active = false; };
+  }, [detailCenter]);
 
   // Sincronizar el centro más cercano una vez que se tiene la ubicación y los centros cargados.
   useEffect(() => {
@@ -281,18 +144,89 @@ export function PublicHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Centros ordenados por cercanía (si hay ubicación) y filtrados por búsqueda.
+  // Conjunto de ids aprobados, para descartar insumos de centros no públicos.
+  const approvedIds = useMemo(
+    () => new Set(approvedCenters.map((c) => c.id)),
+    [approvedCenters],
+  );
+
+  // Mapa centro→insumos urgentes (solo centros aprobados) para el filtro por insumo.
+  const supplyByCenter = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const s of centerSupplies) {
+      if (!approvedIds.has(s.center_id)) continue;
+      let set = m.get(s.center_id);
+      if (!set) {
+        set = new Set();
+        m.set(s.center_id, set);
+      }
+      set.add(s.name);
+    }
+    return m;
+  }, [centerSupplies, approvedIds]);
+
+  // Insumos distintos que al menos un centro aprobado necesita (chips del filtro).
+  const supplyNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const set of supplyByCenter.values()) for (const n of set) names.add(n);
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [supplyByCenter]);
+
+  // Opciones de país a partir de los centros aprobados.
+  const countryOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of approvedCenters) if (c.country) set.add(c.country);
+    const arr = Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
+    return [{ value: '', label: 'Todos los países' }, ...arr.map((c) => ({ value: c, label: c }))];
+  }, [approvedCenters]);
+
+  // Opciones de estado, acotadas al país elegido si lo hay.
+  const stateOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of approvedCenters) {
+      if (selectedCountry && c.country !== selectedCountry) continue;
+      if (c.state) set.add(c.state);
+    }
+    const arr = Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
+    return [{ value: '', label: 'Todos los estados' }, ...arr.map((s) => ({ value: s, label: s }))];
+  }, [approvedCenters, selectedCountry]);
+
+  const hasActiveFilters = !!selectedCountry || !!selectedState || selectedSupplies.length > 0;
+
+  function toggleSupply(name: string) {
+    setSelectedSupplies((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
+    );
+  }
+
+  function clearFilters() {
+    setSelectedCountry('');
+    setSelectedState('');
+    setSelectedSupplies([]);
+  }
+
+  // Centros ordenados por cercanía (si hay ubicación) y filtrados por búsqueda,
+  // país/estado e insumos urgentes seleccionados (todos en AND).
   const ranked = useMemo(() => {
     const base = userPos
       ? sortByDistance(userPos, approvedCenters).map(({ item, km }) => ({ item, km }))
       : approvedCenters.map((c) => ({ item: c, km: null as number | null }));
     const q = query.trim().toLowerCase();
-    if (!q) return base;
-    return base.filter(
-      ({ item }) =>
-        item.name.toLowerCase().includes(q) || item.address.toLowerCase().includes(q),
-    );
-  }, [userPos, query, approvedCenters]);
+    return base.filter(({ item }) => {
+      if (q && !(item.name.toLowerCase().includes(q) || item.address.toLowerCase().includes(q)))
+        return false;
+      if (selectedCountry && item.country !== selectedCountry) return false;
+      if (selectedState && item.state !== selectedState) return false;
+      if (selectedSupplies.length > 0) {
+        const set = supplyByCenter.get(item.id);
+        if (!set || !selectedSupplies.some((s) => set.has(s))) return false;
+      }
+      return true;
+    });
+  }, [userPos, query, approvedCenters, selectedCountry, selectedState, selectedSupplies, supplyByCenter]);
+
+  // Mismo conjunto filtrado que la lista, para que el mapa sea coherente.
+  const filteredCenters = useMemo(() => ranked.map((r) => r.item), [ranked]);
 
   // Distancia (km) por id de centro, para pintarla en cada tarjeta/ficha.
   const kmById = useMemo(() => {
@@ -307,10 +241,35 @@ export function PublicHome() {
   const visibleCenters = ranked.slice(0, visibleCount);
   const hasMore = visibleCount < ranked.length;
 
-  // Reinicia la tanda cuando cambia el filtro/orden (búsqueda o ubicación).
+  // Reinicia la tanda cuando cambia el filtro/orden (búsqueda, ubicación o filtros).
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [query, userPos]);
+  }, [query, userPos, selectedCountry, selectedState, selectedSupplies]);
+
+  // Cuenta cuántos chips de insumo no entran en la primera fila (para "+N").
+  useLayoutEffect(() => {
+    const el = supplyRowRef.current;
+    if (!el || showAllSupplies) {
+      setHiddenSupplyCount(0);
+      return;
+    }
+    const measure = () => {
+      const children = Array.from(el.children) as HTMLElement[];
+      const first = children[0];
+      if (!first) {
+        setHiddenSupplyCount(0);
+        return;
+      }
+      const firstTop = first.offsetTop;
+      let hidden = 0;
+      for (const c of children) if (c.offsetTop > firstTop) hidden++;
+      setHiddenSupplyCount(hidden);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [showAllSupplies, supplyNames]);
 
   // Observa el centinela del final para pedir la siguiente tanda.
   useEffect(() => {
@@ -433,8 +392,14 @@ export function PublicHome() {
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 shrink-0">
-            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-rojo text-white shrink-0">
-              <MapPin className="h-5 w-5" aria-hidden />
+            <span className="logo-badge flex h-9 w-9 items-center justify-center rounded-md shrink-0">
+              <img
+                src="/logo-mark.png"
+                alt="Centros de Acopio Venezuela"
+                className="h-full w-full object-contain"
+                width={36}
+                height={36}
+              />
             </span>
             <span className="flex flex-col leading-none min-w-0">
               <span className="font-display text-h3 font-black tracking-snug text-ink">Unidos</span>
@@ -521,6 +486,38 @@ export function PublicHome() {
 
           {/* Mobile Navigation Trigger */}
           <div className="flex sm:hidden items-center gap-1.5 shrink-0">
+            {/* Portal de Ayuda — visible siempre en mobile */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setPortalOpen((v) => !v)}
+                className="inline-flex h-9 items-center justify-center gap-1 whitespace-nowrap rounded-pill border border-line-soft bg-surface-2 px-3 font-display text-2xs font-black tracking-snug text-ink transition hover:border-azul/50 hover:text-azul"
+              >
+                <Link2 className="h-3.5 w-3.5" aria-hidden />
+                <span className="hidden min-[400px]:inline">Portal de Ayuda</span>
+                <ChevronDown className={cn('h-3 w-3 transition-transform duration-200', portalOpen && 'rotate-180')} aria-hidden />
+              </button>
+              {portalOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setPortalOpen(false)} />
+                  <div className="absolute right-0 top-full z-50 mt-1.5 w-56 overflow-hidden rounded-2xl border border-line-soft bg-surface shadow-lg animate-[selectIn_150ms_ease-out]">
+                    <div className="p-1.5">
+                      {helpCatsQuery.data?.map((cat) => (
+                        <Link
+                          key={cat.id}
+                          to={`/ayuda/${cat.id}`}
+                          onClick={() => setPortalOpen(false)}
+                          className="flex items-center justify-between rounded-xl px-3 py-2.5 font-display text-sm font-bold text-ink transition hover:bg-surface-2 hover:text-azul"
+                        >
+                          {cat.name}
+                          <ChevronRight className="h-4 w-4 text-muted" aria-hidden />
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
             <Button
               variant="ghost"
               size="sm"
@@ -564,35 +561,6 @@ export function PublicHome() {
                 <Users className="h-4 w-4" aria-hidden />
                 ¿Conoces personas desaparecidas?
               </Link>
-              {/* Portal de Ayuda — mobile */}
-              <div className="flex flex-col gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setPortalOpen((v) => !v)}
-                  className="flex h-11 w-full items-center justify-between gap-2 rounded-pill border border-line-soft bg-surface-2 px-5 font-display text-sm font-black tracking-snug text-ink transition hover:border-azul/50"
-                >
-                  <div className="flex items-center gap-2">
-                    <Link2 className="h-4 w-4" aria-hidden />
-                    Portal de Ayuda
-                  </div>
-                  <ChevronDown className={cn('h-4 w-4 text-muted transition-transform duration-200', portalOpen && 'rotate-180')} aria-hidden />
-                </button>
-                {portalOpen && (
-                  <div className="overflow-hidden rounded-2xl border border-line-soft bg-surface p-1.5">
-                    {helpCatsQuery.data?.map((cat) => (
-                      <Link
-                        key={cat.id}
-                        to={`/ayuda/${cat.id}`}
-                        onClick={() => { setPortalOpen(false); setMobileMenuOpen(false); }}
-                        className="flex items-center justify-between rounded-xl px-3 py-2.5 font-display text-sm font-bold text-ink transition hover:bg-surface-2 hover:text-azul"
-                      >
-                        {cat.name}
-                        <ChevronRight className="h-4 w-4 text-muted" aria-hidden />
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
 
               <Link
                 to="/admin/login"
@@ -617,38 +585,12 @@ export function PublicHome() {
           <h1 className="mt-1 font-display text-h1 font-black tracking-tightest text-ink">
             Centros cerca de ti
           </h1>
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <Input
-              label="Buscar centro o zona"
-              hideLabel
-              placeholder="Buscar centro o zona…"
-              leadingIcon={<Search className="h-4 w-4" aria-hidden />}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="sm:flex-1"
-            />
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={locateMe}
-              loading={geoState === 'loading'}
-              leftIcon={geoState !== 'loading' ? <Navigation className="h-4 w-4" /> : undefined}
-            >
-              {userPos ? 'Actualizar ubicación' : 'Mi ubicación'}
-            </Button>
-          </div>
-          {geoState === 'denied' && (
-            <p className="mt-2 font-body text-xs text-danger-ink">
-              {geoError ?? 'No pudimos obtener tu ubicación.'} Puedes explorar la lista y el mapa
-              libremente.
-            </p>
-          )}
         </div>
 
         {/* Lado derecho: Insumos críticos más necesitados (arriba del mapa en desktop) */}
-        <div className="w-full flex flex-col items-center lg:items-center">
+        <div className="w-full flex flex-col items-center lg:items-end">
           {neededSupplies.length > 0 && (
-            <div className="flex flex-col gap-2.5 w-full items-center">
+            <div className="flex flex-col gap-2.5 w-full items-center lg:items-end">
               <div className="flex items-center justify-between w-full max-w-[312px]">
                 <div className="flex items-center gap-1.5">
                   <Activity className="h-4 w-4 text-rojo animate-pulse" />
@@ -656,18 +598,9 @@ export function PublicHome() {
                     Insumos Críticos Requeridos
                   </span>
                 </div>
-
-                {/* Indicador En Vivo */}
-                <span className="inline-flex items-center gap-1 rounded-pill bg-danger-bg px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-danger-ink border border-danger-bg/50 select-none">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-danger"></span>
-                  </span>
-                  En Vivo
-                </span>
               </div>
 
-              <div className="flex flex-wrap gap-3 justify-center">
+              <div className="flex flex-wrap gap-3 justify-center lg:justify-end">
                 {neededSupplies.map((item) => (
                   <div
                     key={item.id}
@@ -678,7 +611,7 @@ export function PublicHome() {
 
                     {/* Icono más grande con fondo circular */}
                     <div className="flex items-center justify-center p-2 rounded-full bg-surface-2 shrink-0">
-                      {getSupplyIcon(item.name, 'h-5 w-5')}
+                      {renderSupplyIcon(item.icon, item.name, 'h-5 w-5')}
                     </div>
 
                     {/* Texto del insumo centrado abajo */}
@@ -721,9 +654,138 @@ export function PublicHome() {
         </div>
       </div>
 
+      {/* Buscador + filtros país/estado + insumos urgentes (afectan lista y mapa) */}
+      <section className={cn(
+        "mx-auto mt-4 w-full max-w-6xl px-4",
+        activeMobileTab !== 'centers' && "hidden lg:block"
+      )}>
+        <div className="flex flex-col gap-2.5">
+          {/* Fila única: ubicación · buscador · estado · país */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={locateMe}
+              loading={geoState === 'loading'}
+              aria-label={userPos ? 'Actualizar ubicación' : 'Usar mi ubicación'}
+              title={userPos ? 'Actualizar ubicación' : 'Usar mi ubicación'}
+              className="aspect-square shrink-0 rounded-full !px-0"
+            >
+              {geoState !== 'loading' && <RefreshCw className="h-4 w-4" />}
+            </Button>
+            <Input
+              label="Buscar centro o zona"
+              hideLabel
+              placeholder="Buscar centro o zona…"
+              leadingIcon={<Search className="h-4 w-4" aria-hidden />}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="sm:flex-1"
+            />
+            <div className="shrink-0 sm:w-44">
+              <Select
+                label="Estado"
+                hideLabel
+                options={stateOptions}
+                value={selectedState}
+                onChange={setSelectedState}
+              />
+            </div>
+            <div className="shrink-0 sm:w-44">
+              <Select
+                label="País"
+                hideLabel
+                options={countryOptions}
+                value={selectedCountry}
+                onChange={(v) => { setSelectedCountry(v); setSelectedState(''); }}
+              />
+            </div>
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="lg"
+                onClick={clearFilters}
+                leftIcon={<X className="h-4 w-4" />}
+                className="shrink-0"
+              >
+                Limpiar filtros
+              </Button>
+            )}
+          </div>
+
+          {geoState === 'denied' && (
+            <p className="font-body text-xs text-danger-ink">
+              {geoError ?? 'No pudimos obtener tu ubicación.'} Puedes explorar la lista y el mapa
+              libremente.
+            </p>
+          )}
+
+          {/* Insumos urgentes (chips) — una sola fila con "+N" para ver el resto */}
+          {supplyNames.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <span className="font-display text-[10px] font-black uppercase tracking-wider text-muted">
+                Filtrar por insumo urgente
+              </span>
+              <div className="flex items-start gap-1.5">
+                <div
+                  ref={supplyRowRef}
+                  className={cn(
+                    "flex flex-1 flex-wrap gap-1.5",
+                    !showAllSupplies && "max-h-[34px] overflow-hidden",
+                  )}
+                >
+                  {supplyNames.map((name) => {
+                    const active = selectedSupplies.includes(name);
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => toggleSupply(name)}
+                        aria-pressed={active}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 font-body text-xs font-bold transition",
+                          active
+                            ? "border-rojo bg-rojo/10 text-rojo"
+                            : "border-line-soft bg-surface-2 text-body hover:border-rojo/40 hover:text-rojo"
+                        )}
+                      >
+                        {renderSupplyIcon(null, name, 'h-3.5 w-3.5')}
+                        {name}
+                      </button>
+                    );
+                  })}
+                  {/* Desplegado: "Ver menos" al final de la lista (dentro del flujo). */}
+                  {showAllSupplies && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllSupplies(false)}
+                      aria-expanded
+                      className="inline-flex shrink-0 items-center gap-1 rounded-pill border border-line-soft bg-surface-2 px-3 py-1.5 font-body text-xs font-bold text-muted transition hover:border-azul/40 hover:text-azul"
+                    >
+                      Ver menos
+                    </button>
+                  )}
+                </div>
+                {/* Colapsado: "+N" a la derecha de la fila única. */}
+                {!showAllSupplies && hiddenSupplyCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSupplies(true)}
+                    aria-expanded={false}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-pill border border-line-soft bg-surface-2 px-3 py-1.5 font-body text-xs font-bold text-muted transition hover:border-azul/40 hover:text-azul"
+                  >
+                    +{hiddenSupplyCount}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* Lista (dominante) + mapa (apoyo) */}
       <section className={cn(
-        "mx-auto mt-5 flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 lg:grid lg:grid-cols-[1.25fr_1fr]",
+        "mx-auto mt-4 flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 lg:grid lg:grid-cols-[1.25fr_1fr]",
         activeMobileTab !== 'centers' && "hidden lg:grid"
       )}>
         {/* Lista */}
@@ -767,11 +829,11 @@ export function PublicHome() {
           </QueryBoundary>
         </div>
 
-        {/* Mapa de apoyo */}
-        <div className="order-1 lg:order-2 lg:static lg:z-0">
+        {/* Mapa de apoyo — sticky en mobile y desktop */}
+        <div className="order-1 lg:order-2 sticky top-[105px] z-10 bg-bg lg:static lg:z-0">
           <div className="h-52 overflow-hidden rounded-xl border border-line-soft shadow-card lg:sticky lg:top-20 lg:h-[70vh]">
             <CenterMap
-              centers={approvedCenters}
+              centers={filteredCenters}
               userPosition={userPos}
               selectedId={mapSelectedId}
               flyTo={flyTo}
@@ -827,9 +889,54 @@ export function PublicHome() {
               </QueryBoundary>
             </div>
 
-            {/* Lado derecho: Simulador de Donaciones en Vivo */}
+            {/* Lado derecho: lo que la red ya recibe con más frecuencia (datos reales) */}
             <div className="w-full">
-              <DonationSimulator />
+              <div className="flex flex-col rounded-xl border border-line-soft bg-surface-2/30 p-4">
+                <div className="flex items-center gap-1.5 border-b border-line-soft pb-2.5 mb-3">
+                  <BarChart3 className="h-4 w-4 text-success" />
+                  <span className="font-display text-2xs font-black uppercase tracking-wider text-ink">
+                    Lo que ya se recibe con frecuencia
+                  </span>
+                </div>
+                {publicTotals.length > 0 ? (
+                  <ul className="flex flex-col gap-2">
+                    {publicTotals.slice(0, 5).map((t, i) => (
+                      <li
+                        key={t.category.id}
+                        className="flex items-center gap-3 p-3 rounded-lg border border-line-soft bg-surface"
+                      >
+                        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-success/10 text-success-ink font-display text-xs font-black shrink-0">
+                          {i + 1}
+                        </span>
+                        <span className="font-display text-sm font-black tracking-tight text-ink">
+                          {t.category.name}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <p className="font-body text-2xs text-muted">
+                      Ejemplos habituales mientras se registran las donaciones de la red.
+                    </p>
+                    <ul className="flex flex-col gap-2">
+                      {FREQUENT_DONATION_EXAMPLES.map((name, i) => (
+                        <li
+                          key={name}
+                          className="flex items-center gap-3 p-3 rounded-lg border border-line-soft bg-surface"
+                        >
+                          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-success/10 text-success-ink font-display text-xs font-black shrink-0">
+                            {i + 1}
+                          </span>
+                          <span className="font-display text-sm font-black tracking-tight text-ink">
+                            {name}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </Card>
@@ -1255,12 +1362,16 @@ export function PublicHome() {
         open={detailCenter !== null}
         onClose={() => setDetailCenter(null)}
         distanceKm={detailCenter ? kmById.get(detailCenter.id) ?? null : null}
+        urgentSupplies={detailFalta}
+        receivedCategories={detailRecibe}
       />
 
       <SuggestCenterModal
         open={suggestModalOpen}
         onClose={() => setSuggestModalOpen(false)}
       />
+
+      <OnboardingTour />
     </div>
   );
 }
