@@ -22,7 +22,7 @@ import {
   SuggestCenterModal,
   OnboardingTour,
 } from '@/components/domain';
-import { CenterMap } from '@/components/map/CenterMap';
+import { LazyCenterMap as CenterMap } from '@/components/map/LazyCenterMap';
 
 
 /* ===========================================================================
