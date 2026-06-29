@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { RefreshCw, MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X, Users, Link2, ChevronDown, ChevronRight } from 'lucide-react';
+import { MapPin, BarChart3, Search, Sun, Moon, Building2, Activity, HeartPulse, Apple, Droplet, GlassWater, Shirt, Wrench, CheckCircle, XCircle, Plus, Menu, X, Link2, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { renderSupplyIcon } from '@/lib/supplyIcons';
 import { useTheme } from '@/lib/theme';
 import { nearest, sortByDistance, reverseGeocode, type LatLng, DEFAULT_LATLNG } from '@/lib/geo';
@@ -294,7 +294,7 @@ export function PublicHome() {
 
   async function fallbackToIpLocation() {
     try {
-      const res = await fetch('https://freeipapi.com/api/json');
+      const res = await fetch('https://free.freeipapi.com/api/json');
       if (!res.ok) throw new Error('API response not OK');
       const data = await res.json();
       if (typeof data.latitude === 'number' && typeof data.longitude === 'number') {
@@ -429,13 +429,6 @@ export function PublicHome() {
             >
               Agregar nuevo centro
             </Button>
-            <Link
-              to="/personas-desaparecidas"
-              className="inline-flex h-control-sm items-center justify-center gap-2 whitespace-nowrap rounded-pill bg-amber-600 px-4 font-display text-2xs font-black tracking-snug text-white transition hover:brightness-95 active:brightness-90"
-            >
-              <Users className="h-4 w-4" aria-hidden />
-              ¿Conoces personas desaparecidas?
-            </Link>
             {/* Portal de Ayuda — dropdown desktop */}
             <div className="relative">
               <button
@@ -480,7 +473,7 @@ export function PublicHome() {
               className="inline-flex h-control-sm items-center justify-center gap-2 whitespace-nowrap rounded-pill bg-rojo px-3 sm:px-4 font-display text-2xs font-black tracking-snug text-white transition hover:brightness-95 active:brightness-90"
             >
               <Building2 className="h-4 w-4" aria-hidden />
-              ¿Eres un centro?
+              Panel administrativo
             </Link>
           </div>
 
@@ -554,21 +547,12 @@ export function PublicHome() {
                 Agregar nuevo centro
               </Button>
               <Link
-                to="/personas-desaparecidas"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-pill bg-amber-600 px-5 font-display text-sm font-black tracking-snug text-white transition hover:brightness-95 active:brightness-90"
-              >
-                <Users className="h-4 w-4" aria-hidden />
-                ¿Conoces personas desaparecidas?
-              </Link>
-
-              <Link
                 to="/admin/login"
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-pill bg-rojo px-5 font-display text-sm font-black tracking-snug text-white transition hover:brightness-95 active:brightness-90"
               >
                 <Building2 className="h-4 w-4" aria-hidden />
-                ¿Eres un centro? (Área Administrativa)
+                Panel administrativo
               </Link>
             </div>
           </div>
@@ -578,13 +562,142 @@ export function PublicHome() {
       {/* Título + buscador + Insumos */}
       <section className="mx-auto w-full max-w-6xl px-4 pt-6 grid gap-6 lg:grid-cols-2 items-start">
         {/* Lado izquierdo: Título + buscador */}
-        <div className="w-full">
-          <p className="font-body text-2xs font-bold uppercase tracking-eyebrow text-azul">
-            Cerca, entre todos
-          </p>
-          <h1 className="mt-1 font-display text-h1 font-black tracking-tightest text-ink">
-            Centros cerca de ti
-          </h1>
+        <div className="w-full flex flex-col">
+          <div>
+            <p className="font-body text-2xs font-bold uppercase tracking-eyebrow text-azul">
+              Cerca, entre todos
+            </p>
+            <h1 className="mt-1 font-display text-h1 font-black tracking-tightest text-ink">
+              Centros cerca de ti
+            </h1>
+          </div>
+
+          {/* Buscador + filtros país/estado + insumos urgentes (afectan lista y mapa) */}
+          <div className={cn(
+            "mt-4 flex flex-col gap-2.5 w-full",
+            activeMobileTab !== 'centers' && "hidden lg:flex"
+          )}>
+            {/* Fila única: ubicación · buscador · estado · país */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={locateMe}
+                loading={geoState === 'loading'}
+                aria-label={userPos ? 'Actualizar ubicación' : 'Usar mi ubicación'}
+                title={userPos ? 'Actualizar ubicación' : 'Usar mi ubicación'}
+                className="aspect-square shrink-0 rounded-full !px-0"
+              >
+                {geoState !== 'loading' && <RefreshCw className="h-4 w-4" />}
+              </Button>
+              <Input
+                label="Buscar centro o zona"
+                hideLabel
+                placeholder="Buscar centro o zona…"
+                leadingIcon={<Search className="h-4 w-4" aria-hidden />}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="sm:flex-1"
+              />
+              <div className="shrink-0 sm:w-56">
+                <Select
+                  label="Estado"
+                  hideLabel
+                  options={stateOptions}
+                  value={selectedState}
+                  onChange={setSelectedState}
+                />
+              </div>
+              <div className="shrink-0 sm:w-56">
+                <Select
+                  label="País"
+                  hideLabel
+                  options={countryOptions}
+                  value={selectedCountry}
+                  onChange={(v) => { setSelectedCountry(v); setSelectedState(''); }}
+                />
+              </div>
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={clearFilters}
+                  leftIcon={<X className="h-4 w-4" />}
+                  className="shrink-0"
+                >
+                  Limpiar filtros
+                </Button>
+              )}
+            </div>
+
+            {geoState === 'denied' && (
+              <p className="font-body text-xs text-danger-ink">
+                {geoError ?? 'No pudimos obtener tu ubicación.'} Puedes explorar la lista y el mapa
+                libremente.
+              </p>
+            )}
+
+            {/* Insumos urgentes (chips) — una sola fila con "+N" para ver el resto */}
+            {supplyNames.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <span className="font-display text-[10px] font-black uppercase tracking-wider text-muted">
+                  Filtrar por insumo urgente
+                </span>
+                <div className="flex items-start gap-1.5">
+                  <div
+                    ref={supplyRowRef}
+                    className={cn(
+                      "flex flex-1 flex-wrap gap-1.5",
+                      !showAllSupplies && "max-h-[34px] overflow-hidden",
+                    )}
+                  >
+                    {supplyNames.map((name) => {
+                      const active = selectedSupplies.includes(name);
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => toggleSupply(name)}
+                          aria-pressed={active}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 font-body text-xs font-bold transition",
+                            active
+                              ? "border-rojo bg-rojo/10 text-rojo"
+                              : "border-line-soft bg-surface-2 text-body hover:border-rojo/40 hover:text-rojo"
+                          )}
+                        >
+                          {renderSupplyIcon(null, name, 'h-3.5 w-3.5')}
+                          {name}
+                        </button>
+                      );
+                    })}
+                    {/* Desplegado: "Ver menos" al final de la lista (dentro del flujo). */}
+                    {showAllSupplies && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllSupplies(false)}
+                        aria-expanded
+                        className="inline-flex shrink-0 items-center gap-1 rounded-pill border border-line-soft bg-surface-2 px-3 py-1.5 font-body text-xs font-bold text-muted transition hover:border-azul/40 hover:text-azul"
+                      >
+                        Ver menos
+                      </button>
+                    )}
+                  </div>
+                  {/* Colapsado: "+N" a la derecha de la fila única. */}
+                  {!showAllSupplies && hiddenSupplyCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllSupplies(true)}
+                      aria-expanded={false}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-pill border border-line-soft bg-surface-2 px-3 py-1.5 font-body text-xs font-bold text-muted transition hover:border-azul/40 hover:text-azul"
+                    >
+                      +{hiddenSupplyCount}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Lado derecho: Insumos críticos más necesitados (arriba del mapa en desktop) */}
@@ -604,7 +717,7 @@ export function PublicHome() {
                 {neededSupplies.map((item) => (
                   <div
                     key={item.id}
-                    className="relative flex flex-col items-center justify-center gap-1.5 w-24 h-24 rounded-2xl border border-line-soft bg-surface p-3 hover:scale-[1.04] hover:border-azul/45 hover:shadow-xs transition-all duration-200 select-none"
+                    className="relative flex flex-col items-center justify-start gap-2 w-24 h-24 rounded-2xl border border-line-soft bg-surface pt-3.5 px-2 pb-2 hover:scale-[1.04] hover:border-azul/45 hover:shadow-xs transition-all duration-200 select-none"
                   >
                     {/* Indicador verde de pulso en la esquina superior derecha */}
                     <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-success animate-pulse" title="Requerido urgentemente" />
@@ -653,135 +766,6 @@ export function PublicHome() {
           </button>
         </div>
       </div>
-
-      {/* Buscador + filtros país/estado + insumos urgentes (afectan lista y mapa) */}
-      <section className={cn(
-        "mx-auto mt-4 w-full max-w-6xl px-4",
-        activeMobileTab !== 'centers' && "hidden lg:block"
-      )}>
-        <div className="flex flex-col gap-2.5">
-          {/* Fila única: ubicación · buscador · estado · país */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button
-              variant="secondary"
-              size="lg"
-              onClick={locateMe}
-              loading={geoState === 'loading'}
-              aria-label={userPos ? 'Actualizar ubicación' : 'Usar mi ubicación'}
-              title={userPos ? 'Actualizar ubicación' : 'Usar mi ubicación'}
-              className="aspect-square shrink-0 rounded-full !px-0"
-            >
-              {geoState !== 'loading' && <RefreshCw className="h-4 w-4" />}
-            </Button>
-            <Input
-              label="Buscar centro o zona"
-              hideLabel
-              placeholder="Buscar centro o zona…"
-              leadingIcon={<Search className="h-4 w-4" aria-hidden />}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="sm:flex-1"
-            />
-            <div className="shrink-0 sm:w-44">
-              <Select
-                label="Estado"
-                hideLabel
-                options={stateOptions}
-                value={selectedState}
-                onChange={setSelectedState}
-              />
-            </div>
-            <div className="shrink-0 sm:w-44">
-              <Select
-                label="País"
-                hideLabel
-                options={countryOptions}
-                value={selectedCountry}
-                onChange={(v) => { setSelectedCountry(v); setSelectedState(''); }}
-              />
-            </div>
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="lg"
-                onClick={clearFilters}
-                leftIcon={<X className="h-4 w-4" />}
-                className="shrink-0"
-              >
-                Limpiar filtros
-              </Button>
-            )}
-          </div>
-
-          {geoState === 'denied' && (
-            <p className="font-body text-xs text-danger-ink">
-              {geoError ?? 'No pudimos obtener tu ubicación.'} Puedes explorar la lista y el mapa
-              libremente.
-            </p>
-          )}
-
-          {/* Insumos urgentes (chips) — una sola fila con "+N" para ver el resto */}
-          {supplyNames.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <span className="font-display text-[10px] font-black uppercase tracking-wider text-muted">
-                Filtrar por insumo urgente
-              </span>
-              <div className="flex items-start gap-1.5">
-                <div
-                  ref={supplyRowRef}
-                  className={cn(
-                    "flex flex-1 flex-wrap gap-1.5",
-                    !showAllSupplies && "max-h-[34px] overflow-hidden",
-                  )}
-                >
-                  {supplyNames.map((name) => {
-                    const active = selectedSupplies.includes(name);
-                    return (
-                      <button
-                        key={name}
-                        type="button"
-                        onClick={() => toggleSupply(name)}
-                        aria-pressed={active}
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 font-body text-xs font-bold transition",
-                          active
-                            ? "border-rojo bg-rojo/10 text-rojo"
-                            : "border-line-soft bg-surface-2 text-body hover:border-rojo/40 hover:text-rojo"
-                        )}
-                      >
-                        {renderSupplyIcon(null, name, 'h-3.5 w-3.5')}
-                        {name}
-                      </button>
-                    );
-                  })}
-                  {/* Desplegado: "Ver menos" al final de la lista (dentro del flujo). */}
-                  {showAllSupplies && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllSupplies(false)}
-                      aria-expanded
-                      className="inline-flex shrink-0 items-center gap-1 rounded-pill border border-line-soft bg-surface-2 px-3 py-1.5 font-body text-xs font-bold text-muted transition hover:border-azul/40 hover:text-azul"
-                    >
-                      Ver menos
-                    </button>
-                  )}
-                </div>
-                {/* Colapsado: "+N" a la derecha de la fila única. */}
-                {!showAllSupplies && hiddenSupplyCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllSupplies(true)}
-                    aria-expanded={false}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-pill border border-line-soft bg-surface-2 px-3 py-1.5 font-body text-xs font-bold text-muted transition hover:border-azul/40 hover:text-azul"
-                  >
-                    +{hiddenSupplyCount}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
 
       {/* Lista (dominante) + mapa (apoyo) */}
       <section className={cn(
