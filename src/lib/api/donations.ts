@@ -73,11 +73,19 @@ export interface CreateDonationInput {
   /** Vacío/espacios ⇒ anónimo (el RPC normaliza a NULL). */
   donorName: string;
   items: DonationItemInput[];
+  /**
+   * Clave anti-duplicado (idempotencia). Opcional para el alta online directa;
+   * la cola offline siempre la envía para que un reenvío no duplique la donación
+   * (la BD ignora un segundo insert con el mismo uuid).
+   */
+  clientUuid?: string;
 }
 
 /**
  * Crea la donación y sus ítems de forma atómica vía RPC `create_donation`
  * (un solo round-trip; o todo o nada). Devuelve el id de la donación creada.
+ * Si se pasa `clientUuid`, el alta es idempotente: reenviar la misma donación
+ * devuelve el id existente en vez de duplicarla.
  */
 export function createDonation(input: CreateDonationInput): Promise<string> {
   const donorName = input.donorName.trim();
@@ -86,6 +94,7 @@ export function createDonation(input: CreateDonationInput): Promise<string> {
       p_center_id: input.centerId,
       p_donor_name: donorName === '' ? null : donorName,
       p_items: input.items,
+      p_client_uuid: input.clientUuid ?? null,
     });
     if (error) throw fromPostgrestError(error);
     return data as string;

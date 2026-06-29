@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
-import { Building2, Tags, LogOut, Menu, X, Sun, Moon, Boxes, Link2 } from 'lucide-react';
+import { Building2, Tags, LogOut, Menu, X, Sun, Moon, Boxes, Link2, KeyRound } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -85,6 +85,14 @@ export function SuperLayout() {
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => navigate('/admin/cuenta')}
+            leftIcon={<KeyRound className="h-4 w-4" />}
+          >
+            Cambiar contraseña
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={toggleTheme}
             leftIcon={theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           >
@@ -112,6 +120,18 @@ export function SuperLayout() {
         {mobileOpen && (
           <div className="border-b border-line-soft bg-surface px-4 py-4 lg:hidden">
             <NavItems onNavigate={() => setMobileOpen(false)} />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-3 w-full"
+              onClick={() => {
+                setMobileOpen(false);
+                navigate('/admin/cuenta');
+              }}
+              leftIcon={<KeyRound className="h-4 w-4" />}
+            >
+              Cambiar contraseña
+            </Button>
             <div className="mt-3 flex gap-2">
               <Button variant="ghost" size="sm" onClick={toggleTheme} className="flex-1"
                 leftIcon={theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}>

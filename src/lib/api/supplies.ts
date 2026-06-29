@@ -59,6 +59,37 @@ export function getNeededSupplies(centerId?: string | null): Promise<NeededSuppl
   });
 }
 
+/** Insumo urgente asociado a un centro (para el filtro del mapa por insumos). */
+export interface CenterNeededSupply {
+  center_id: string;
+  name: string;
+}
+
+/**
+ * Insumos urgentes de TODOS los centros (los que tienen center_id, no globales).
+ * Lectura pública. Sirve para construir los chips del filtro del mapa y el
+ * mapa centro→insumos. Si la tabla no existe aún, devuelve [].
+ */
+export function getCentersNeededSupplies(): Promise<CenterNeededSupply[]> {
+  return withRetry(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('needed_supplies')
+        .select('center_id, name')
+        .not('center_id', 'is', null)
+        .order('name', { ascending: true });
+      if (error) {
+        if (error.code === '42P01') return [];
+        throw fromPostgrestError(error);
+      }
+      return (data ?? []) as CenterNeededSupply[];
+    } catch (err: any) {
+      if (err?.code === '42P01' || err?.message?.includes('42P01')) return [];
+      return [];
+    }
+  });
+}
+
 /** Añade un nuevo insumo al listado (requiere rol de superadmin o admin del centro). */
 export function addNeededSupply(
   name: string,
