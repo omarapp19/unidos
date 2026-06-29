@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
-import { Building2, Tags, LogOut, Menu, X, Shield, Sun, Moon, Boxes, Link2 } from 'lucide-react';
+import { Building2, Tags, LogOut, Menu, X, Sun, Moon, Boxes, Link2 } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -55,8 +55,14 @@ export function SuperLayout() {
 
   const Brand = (
     <Link to="/admin/super/centros" className="flex items-center gap-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-md bg-rojo text-white">
-        <Shield className="h-5 w-5" aria-hidden />
+      <span className="logo-badge flex h-8 w-8 items-center justify-center rounded-md">
+        <img
+          src="/logo-mark.png"
+          alt="Centros de Acopio Venezuela"
+          className="h-full w-full object-contain"
+          width={32}
+          height={32}
+        />
       </span>
       <span className="font-display text-h3 font-black tracking-snug text-ink">Unidos</span>
     </Link>

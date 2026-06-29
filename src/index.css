@@ -84,6 +84,17 @@
   }
 }
 
+/* Logo de marca en headers. Transparente en claro; en oscuro el pin azul marino
+   se funde con el fondo, así que se envuelve en un badge claro sutil. */
+.logo-badge {
+  background: transparent;
+}
+.dark .logo-badge {
+  background: var(--color-surface);
+  padding: 2px;
+  box-shadow: 0 0 0 1px var(--color-border-soft);
+}
+
 /* Apertura del menú del Select: extensión suave desde el input. */
 @keyframes selectIn {
   from {

@@ -19,3 +19,5 @@ export type { DonutProps, DonutSegment } from './Donut';
 export { SuggestCenterModal } from './SuggestCenterModal';
 export type { SuggestCenterModalProps } from './SuggestCenterModal';
 
+export { OnboardingTour } from './OnboardingTour';
+

@@ -7,6 +7,7 @@ import {
   deleteNeededSupply,
   type NeededSupply,
 } from '@/lib/api/supplies';
+import { renderSupplyIcon, SupplyIconPicker } from '@/lib/supplyIcons';
 import { useQuery } from '@/lib/hooks/useQuery';
 import { useMutation } from '@/lib/hooks/useMutation';
 import { Button, Card, Modal, Input, QueryBoundary, EmptyState } from '@/components/ui';
@@ -17,25 +18,30 @@ import { Button, Card, Modal, Input, QueryBoundary, EmptyState } from '@/compone
 
 export function SuperSupplies() {
   const supplies = useQuery(getNeededSupplies, []);
-  const create = useMutation(addNeededSupply);
-  const update = useMutation((args: { id: string; name: string }) =>
-    updateNeededSupply(args.id, args.name),
+  const create = useMutation((args: { name: string; icon: string | null }) =>
+    addNeededSupply(args.name, null, args.icon),
+  );
+  const update = useMutation((args: { id: string; name: string; icon: string | null }) =>
+    updateNeededSupply(args.id, args.name, args.icon),
   );
   const remove = useMutation(deleteNeededSupply);
 
   const [editing, setEditing] = useState<NeededSupply | 'new' | null>(null);
   const [name, setName] = useState('');
+  const [icon, setIcon] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const busy = create.loading || update.loading;
 
   function openNew() {
     setName('');
+    setIcon(null);
     setFormError(null);
     setEditing('new');
   }
 
   function openEdit(s: NeededSupply) {
     setName(s.name);
+    setIcon(s.icon ?? null);
     setFormError(null);
     setEditing(s);
   }
@@ -53,9 +59,9 @@ export function SuperSupplies() {
     }
     try {
       if (editing === 'new') {
-        await create.mutate(name.trim());
+        await create.mutate({ name: name.trim(), icon });
       } else if (editing !== null) {
-        await update.mutate({ id: editing.id, name: name.trim() });
+        await update.mutate({ id: editing.id, name: name.trim(), icon });
       }
       close();
       supplies.refetch();
@@ -110,7 +116,10 @@ export function SuperSupplies() {
           <div className="flex flex-col gap-2">
             {list.map((s) => (
               <Card key={s.id} className="flex items-center justify-between p-4 bg-surface">
-                <div>
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-2 shrink-0">
+                    {renderSupplyIcon(s.icon, s.name, 'h-5 w-5')}
+                  </span>
                   <p className="font-display text-base font-black text-ink">{s.name}</p>
                 </div>
                 <div className="flex gap-2">
@@ -151,6 +160,10 @@ export function SuperSupplies() {
             placeholder="Ej: Cobijas, Alimentos no perecederos..."
             autoFocus
           />
+          <div className="flex flex-col gap-1.5">
+            <span className="font-body text-sm font-semibold text-ink">Icono</span>
+            <SupplyIconPicker value={icon} onChange={setIcon} disabled={busy} />
+          </div>
           {formError && <p className="font-body text-sm text-danger-ink">{formError}</p>}
           <div className="mt-2 flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={close} disabled={busy}>

@@ -64,6 +64,8 @@ type FormState = {
   name: string;
   organization: string;
   address: string;
+  state: string;
+  country: string;
   instagram: string;
   website: string;
   email: string;
@@ -84,7 +86,8 @@ type ErrorKey =
 type Errors = Partial<Record<ErrorKey, string>>;
 
 const EMPTY_FORM: FormState = {
-  name: '', organization: '', address: '', instagram: '', website: '', email: '',
+  name: '', organization: '', address: '', state: '', country: 'Venezuela',
+  instagram: '', website: '', email: '',
   status: 'receiving',
   lat: '',
   lng: '',
@@ -255,6 +258,7 @@ export function SuperCenters() {
   function openEdit(c: Center) {
     setForm({
       name: c.name, organization: c.organization, address: c.address,
+      state: c.state ?? '', country: c.country ?? 'Venezuela',
       instagram: c.instagram ?? '', website: c.website ?? '', email: c.email ?? '',
       status: c.status,
       lat: String(c.lat),
@@ -330,13 +334,20 @@ export function SuperCenters() {
           instagram, website, email: form.email,
           lat: finalLat, lng: finalLng, isApproved: true,
         });
-        if (form.status !== 'receiving') {
-          await updateCenterAdmin(newId, { status: form.status });
+        const newPatch: CenterPatch = {};
+        if (form.status !== 'receiving') newPatch.status = form.status;
+        if (form.state.trim()) newPatch.state = form.state.trim();
+        if (form.country.trim() && form.country.trim() !== 'Venezuela')
+          newPatch.country = form.country.trim();
+        if (Object.keys(newPatch).length > 0) {
+          await updateCenterAdmin(newId, newPatch);
         }
       } else if (editing !== null) {
         const patch: CenterPatch = {
           name: form.name.trim(), organization: form.organization.trim(),
-          address: form.address.trim(), schedule: scheduleStr,
+          address: form.address.trim(),
+          state: form.state.trim() || null, country: form.country.trim() || 'Venezuela',
+          schedule: scheduleStr,
           phone: phoneStr || null, whatsapp: whatsappStr || null,
           instagram: instagram || null, website: website || null,
           email: form.email.trim() || null,
@@ -608,6 +619,14 @@ export function SuperCenters() {
             }}
             error={errors.address}
           />
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Input label="Estado / Provincia (opcional)" placeholder="Zulia"
+              value={form.state} onChange={(e) => set('state', e.target.value)}
+              hint="Usado por el filtro público por estado/país." />
+            <Input label="País" placeholder="Venezuela"
+              value={form.country} onChange={(e) => set('country', e.target.value)} />
+          </div>
 
           <LocationField
             lat={form.lat ? parseFloat(form.lat) : null}

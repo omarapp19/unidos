@@ -12,7 +12,7 @@ import { withRetry } from './retry';
 /** Columnas que consume la UI (evita `select('*')` para no traer de más). */
 const COLUMNS =
   'id, name, address, lat, lng, phone, whatsapp, instagram, website, email, ' +
-  'schedule, status, is_approved, is_verified, organization, created_at';
+  'schedule, status, is_approved, is_verified, organization, state, country, created_at';
 
 /** Centros aprobados: lo que ve el público en mapa y lista. Sin login. */
 export function getApprovedCenters(): Promise<Center[]> {
@@ -45,6 +45,8 @@ export interface CenterPatch {
   name?: string;
   organization?: string;
   address?: string;
+  state?: string | null;
+  country?: string;
   schedule?: string;
   phone?: string | null;
   whatsapp?: string | null;
