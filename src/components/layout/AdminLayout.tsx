@@ -81,6 +81,11 @@ export function AdminLayout() {
   if (profile?.role === 'superadmin') {
     return <Navigate to="/admin/super" replace />;
   }
+  // Sesión válida pero sin centro asignado (p. ej. reclamo aún sin aprobar): no
+  // tiene panel que mostrar; el login explica el estado de su solicitud.
+  if (!profile?.center_id) {
+    return <Navigate to="/admin/login" replace />;
+  }
 
   const Brand = (
     <Link to="/admin/dashboard" className="flex items-center gap-2">

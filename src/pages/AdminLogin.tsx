@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, ArrowLeft, Eye, EyeOff, Clock } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, Input } from '@/components/ui';
+import { getMyClaimStatus } from '@/lib/api/claims';
 
 /* ===========================================================================
    Login del administrador (PRD Módulo 2). Autentica con Supabase Auth vía
@@ -12,26 +13,53 @@ import { Button, Card, Input } from '@/components/ui';
 
 export function AdminLogin() {
   const navigate = useNavigate();
-  const { status, profile, signIn } = useAuth();
+  const { status, profile, signIn, signOut } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Mensaje para cuentas autenticadas pero sin centro (solicitud pendiente, etc.).
+  const [pendingInfo, setPendingInfo] = useState<string | null>(null);
 
-  // Redirige solo cuando la sesión está resuelta (perfil cargado). No navegamos
-  // de forma imperativa tras signIn: el perfil/rol se resuelve async y hacerlo
-  // antes provocaba un rebote al login en el primer intento. El superadmin se
-  // reencamina en AdminLayout hacia /admin/super.
+  // Redirige solo cuando la sesión está resuelta. Un usuario con perfil (admin o
+  // superadmin) entra al panel. Pero un solicitante con reclamo aún sin aprobar
+  // NO tiene perfil: en ese caso mostramos el estado de su solicitud y cerramos
+  // la sesión (antes el login se quedaba colgado esperando un perfil que no llega).
   useEffect(() => {
-    if (status === 'authenticated' && profile) {
+    if (status !== 'authenticated') return;
+    if (profile) {
       navigate('/admin', { replace: true });
+      return;
     }
-  }, [status, profile, navigate]);
+    let cancelled = false;
+    (async () => {
+      let msg =
+        'Esta cuenta todavía no tiene un centro asignado. Si enviaste una solicitud, espera la aprobación de un coordinador.';
+      try {
+        const claim = await getMyClaimStatus();
+        if (claim?.status === 'pending') {
+          msg = `Tu solicitud para administrar ${claim.center_name} está en revisión. Te avisaremos cuando un coordinador la apruebe.`;
+        } else if (claim?.status === 'rejected') {
+          msg = `Tu solicitud para administrar ${claim.center_name} no fue aprobada. Si crees que es un error, contacta al coordinador.`;
+        }
+      } catch {
+        /* sin estado de reclamo: queda el mensaje genérico */
+      }
+      if (cancelled) return;
+      setPendingInfo(msg);
+      setLoading(false);
+      await signOut();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, profile, navigate, signOut]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setPendingInfo(null);
     if (!email.trim() || !password.trim()) {
       setError('Ingresa tu correo y contraseña.');
       return;
@@ -72,6 +100,13 @@ export function AdminLogin() {
               Inicia sesión para registrar donaciones y ver tu panel.
             </p>
           </div>
+
+          {pendingInfo && (
+            <div className="mb-4 flex items-start gap-2 rounded-lg border border-warning bg-warning-bg p-3">
+              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-warning-ink" aria-hidden />
+              <p className="font-body text-sm text-warning-ink">{pendingInfo}</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
             <Input
